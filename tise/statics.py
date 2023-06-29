@@ -8,11 +8,12 @@ from pathlib import Path
 
 # Application constants
 APP_NAME = "TISE: Terra Invicta Save Editor"
+APP_VERSION = "1.0.1"
 APP_AUTHOR = "Jake Staehle <jacob@staehle.us>"
 APP_LINKTXT = "staehle/tise"
 APP_LINKURI = "https://github.com/staehle/tise"
 APP_NOTICE = [
-    APP_NAME,
+    f"Version {APP_VERSION}",
     f"Created by {APP_AUTHOR}",
     "For more information, visit our GitHub page:",
 ]
