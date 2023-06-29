@@ -15,6 +15,7 @@ This software is provided as-is. Please ensure you backup your save files before
   - Faction opinion/influence percentages ("publicOpinion" within a "TINationState" object): Will auto-calculate the "undecided" percentage to ensure they all add up to 1.
 - References to other objects include a handy "Go to Ref" button to auto-navigate you to them.
 - Saved game formatting should be 1:1 identical to original save files, including quirks.
+- Easy navigation with "Go to Ref" functionality, and Back/Forward buttons (bound to mouse buttons as well)
 
 ## Usage
 

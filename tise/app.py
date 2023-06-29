@@ -372,10 +372,13 @@ class TISE:
         self.default_directory = s.DEFAULT_SAVE_PATH.expanduser()
         self.json_data: Dict[str, Any] = {}
         self.statustext = ""
-        self.current_id = 0
+        self.game_id = 0
         self.ids: Dict[int, Tuple[str, int]] = {}  # Key of object ID. Value of (group string key, list index)
         self.groups: List[str] = []  # List of known group strings
         self.imgs: Dict[str, PhotoImage] = {}
+        self.cur_iid = -1
+        self.history = []
+        self.history_undo = []
 
         # Build Menu Bar
         self.menu_bar = Menu(self.root)
@@ -389,6 +392,18 @@ class TISE:
             state="disabled",
         )
         self.menu_bar.add_separator()
+        self.menu_bar.add_command(
+            label=s.UI_GOBACK,
+            command=self._go_back,
+            state="disabled",
+        )
+        self.root.bind("<Button-4>", lambda _: self._go_back())
+        self.menu_bar.add_command(
+            label=s.UI_GOFORWARD,
+            command=self._go_forward,
+            state="disabled",
+        )
+        self.root.bind("<Button-5>", lambda _: self._go_forward())
         self.menu_bar.add_command(
             label=s.UI_GOTOREF,
             command=self._show_gotoref_popup,
@@ -468,15 +483,66 @@ class TISE:
     def _refresh_status_bar(self, extratext: Optional[str] = None):
         """From text in `statustext`, refresh `label_f` text"""
         text = [s.UI_STATUS_READY]
-        if self.current_id:
-            text = [f"Current ID: {self.current_id}"]
+        if self.game_id:
+            text = [f"Game ID: {self.game_id}"]
         if self.groups:
             text.append(f"Groups: {len(self.groups)}")
         if self.ids:
             text.append(f"Unique objects: {len(self.ids)}")
+        if self.cur_iid > -1:
+            text.append(f"Currently selected object ID: {self.cur_iid}")
         if extratext:
             text.append(extratext)
         self.label_f.config(text=", ".join(text))
+
+    def _log_history_stacks(self, caller: str):
+        """idk i wanna call this a bunch"""
+        logging.info(
+            "%s HISTORY stack = [%s] -- undo stack = [%s]",
+            caller,
+            ", ".join([str(i) for i in self.history]),
+            ", ".join([str(i) for i in self.history_undo]),
+        )
+
+    def _go_back(self):
+        """Go back to previously seen object"""
+        self._log_history_stacks("GB")
+        if not self.history:
+            logging.info("No history for going back")
+            self.menu_bar.entryconfig(s.UI_GOBACK, state="disabled")
+            return
+        # Going back to:
+        new_iid = self.history.pop()
+        if not self.history:
+            # blank out menu button
+            self.menu_bar.entryconfig(s.UI_GOBACK, state="disabled")
+        # For the Go Forward function (undo go back), add to that stack:
+        self.history_undo.append(self.cur_iid)
+        self.menu_bar.entryconfig(s.UI_GOFORWARD, state="normal")
+        # prevent re-adding old one to history:
+        self.cur_iid = -1
+        logging.info("Going back to IID %d", new_iid)
+        self.go_to_ref(new_iid)
+
+    def _go_forward(self):
+        """Go forward after going back"""
+        self._log_history_stacks("GF")
+        if not self.history_undo:
+            logging.info("No history for going fwd")
+            self.menu_bar.entryconfig(s.UI_GOFORWARD, state="disabled")
+            return
+        # Going fwd to:
+        new_iid = self.history_undo.pop()
+        if not self.history_undo:
+            # blank out menu button
+            self.menu_bar.entryconfig(s.UI_GOFORWARD, state="disabled")
+        # Add cur iid to go back history
+        self.history.append(self.cur_iid)
+        self.menu_bar.entryconfig(s.UI_GOBACK, state="normal")
+        # prevent re-adding old one to history:
+        self.cur_iid = -1
+        logging.info("Going frwd to IID %d", new_iid)
+        self.go_to_ref(new_iid)
 
     def _show_about_popup(self):
         """Open a new window showing the about info"""
@@ -553,7 +619,7 @@ class TISE:
         logging.info("Clearing old keys, groups")
         self.ids = {}
         self.groups = []
-        self.current_id = 0
+        self.game_id = 0
         # Reset UI
         logging.info("Clearing listbox and panedwindow_d content")
         self.listbox_g.delete(0, "end")
@@ -594,8 +660,8 @@ class TISE:
         Reset our `keys` and `groups` values.
         Finally populate the items in listbox_g.
         """
-        self.current_id = self.json_data[s.CURRENTID][s.RVAL]
-        logging.info("PARSE: New JSON data: Current ID -> %d", self.current_id)
+        self.game_id = self.json_data[s.CURRENTID][s.RVAL]
+        logging.info("PARSE: New JSON data: Game ID -> %d", self.game_id)
         self._refresh_status_bar("Refreshing data")
         # Refresh our group and ID registries
         for gidx, (group, listitems) in enumerate(self.json_data[s.GAMESTATES].items()):
@@ -700,7 +766,22 @@ class TISE:
             iid == item[s.KEY][s.RVAL]
         ), f"SL: Mismatch iid {iid}, group '{group}', lidx {lidx}: Got iid {item[s.KEY][s.RVAL]}"
         values = item[s.VALUE]
-        logging.info("SELLIST: Got item ID '%d' with %d values", iid, len(values))
+        logging.info("SELLIST: Got item ID '%d' (%s) with %d values", iid, str(display_name), len(values))
+        self.label_d.config(text=f"{s.UI_LABEL_D} for {display_name} (ID {iid})")
+
+        # Add old one to the history
+        if self.cur_iid != -1:
+            # avoid duplicates
+            if not self.history or (self.history[-1] != self.cur_iid):
+                logging.debug("SELLIST: Adding previous object ID to history: %d", self.cur_iid)
+                self.history.append(self.cur_iid)
+                self.menu_bar.entryconfig(s.UI_GOBACK, state="normal")
+            # Additionally, if cur iid was not -1, then clear the go forward stack,
+            # since this was selected directly by the user
+            self.history_undo.clear()
+            self.menu_bar.entryconfig(s.UI_GOFORWARD, state="disabled")
+        self._log_history_stacks("SL")
+        self.cur_iid = iid
 
         # Create a TreeView inside the panedwindow for all entries
         frame_entries = ttk.Frame(self.panedwindow_d, height=s.DELEM_HEIGHT)
@@ -954,7 +1035,12 @@ class TISE:
         if executing_window is not None:
             executing_window.destroy()
             self.root.focus_set()
-        group, _ = self.ids[iid]
+        try:
+            group, _ = self.ids[iid]
+        except KeyError:
+            logging.error("GTR: No object with ID %d", iid)
+            self._refresh_status_bar(f"Go To Ref FAIL: No object with ID {iid}")
+            return
         # Get group's index
         try:
             gidx = list(self.listbox_g.get(0, "end")).index(group)
