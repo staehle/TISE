@@ -8,6 +8,7 @@ This software is provided as-is. Please ensure you backup your save files before
 
 ## Features
 
+- Supports both compressed and uncompressed save files
 - Supports ALL object types within Terra Invicta. Load any object in your save game for editing.
 - All data types are editable! Dictionaries have some display help for editing as well. For complex objects such as lists or nested dictionaries, they are modifyable in their raw JSON format.
 - Specific support for TI object types:
@@ -19,11 +20,7 @@ This software is provided as-is. Please ensure you backup your save files before
 
 Get the latest `tise.exe` from the GitHub Releases ->
 
-Within Terra Invicta itself, make sure that your saves are _uncompressed_:
-
-![no checkbox](img/uncompressed.png)
-
-To start editing your Terra Invicta save game file, click "Load JSON", open your save game. You can then navigate through the different groups of game objects.
+To start editing your Terra Invicta save game file, click "Load Game", open your save game. You can then navigate through the different groups of game objects.
 
 ### Public Opinion editing example
 

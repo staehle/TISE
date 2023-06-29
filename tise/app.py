@@ -219,10 +219,10 @@ class EditableReferenceEntry(EditableIntEntry):
         )
         button_gtr.grid(row=0, column=1, sticky="w")
 
-    def real(self) -> RelationalReference:
-        """Take whatever was set to inner_var (should be an int), put it in our old ref, return"""
+    def real(self) -> dict:
+        """Take whatever was set to inner_var (should be an int), put it in our old ref, return dict"""
         self._rreference.reference = int(self.inner_var.get())
-        return self._rreference
+        return self._rreference.to_reference()
 
 
 class EditableDictEntry(EditableEntry):
