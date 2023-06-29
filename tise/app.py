@@ -5,6 +5,7 @@ import argparse
 import logging
 import json
 import re
+import gzip
 from typing import Any, Dict, List, Tuple, Optional, Union
 from pathlib import Path
 from tkinter import (
@@ -73,7 +74,7 @@ def preprocess_dict(indict):
     return indict
 
 
-def hackify_json(indict: dict) -> str:
+def hackify_json(indict: dict) -> bytes:
     """For some reason, official save files have empty "{}" on multiple lines, not single ones"""
     mydict = preprocess_dict(indict.copy())
     raw = json.dumps(mydict, cls=UpperCaseEFloatEncoder, ensure_ascii=True, indent=4)
@@ -84,7 +85,7 @@ def hackify_json(indict: dict) -> str:
             processed_lines.append(line)
         else:
             processed_lines.append("")
-    return "\n".join(processed_lines)
+    return "\n".join(processed_lines).encode("utf-8")
 
 
 class UpperCaseEFloatEncoder(json.JSONEncoder):
@@ -367,7 +368,7 @@ class TISE:
     def __init__(self, root: Tk):
         self.root = root
         self.root.geometry(f"{s.WINDOW_WIDTH}x{s.WINDOW_HEIGHT}")
-        self.root.title(s.APP_NAME)
+        self.root.title(f"{s.APP_NAME} {s.APP_VERSION}")
         self.default_directory = s.DEFAULT_SAVE_PATH.expanduser()
         self.json_data: Dict[str, Any] = {}
         self.statustext = ""
@@ -533,16 +534,21 @@ class TISE:
             initialdir=self.default_directory,
             title=s.UI_LOADJSON,
             filetypes=[
-                (s.JSON_FILE, "*.json"),
+                (s.UI_SAVEFILE, s.OD_SAVEEXTS),
             ],
         )
-        logging.info("Loading JSON file: %s", file_path)
+        logging.info("Loading game file: %s", file_path)
         if not file_path:
             logging.warning("Not loading empty file!")
             return
-        with Path(file_path).open(mode="r", encoding=s.ENC) as fp:
-            self.json_data = json.load(fp)
-            assert isinstance(self.json_data, dict), f"Bad loading of JSON file, got type {type(self.json_data)}"
+        if file_path.endswith(".gz"):
+            with gzip.open(file_path, mode="rb") as fp:
+                self.json_data = json.load(fp)
+                assert isinstance(self.json_data, dict), f"Bad loading of JSON file, got type {type(self.json_data)}"
+        elif file_path.endswith(".json"):
+            with Path(file_path).open(mode="rb") as fp:
+                self.json_data = json.load(fp)
+                assert isinstance(self.json_data, dict), f"Bad loading of JSON file, got type {type(self.json_data)}"
         # Clear previous keys and groups
         logging.info("Clearing old keys, groups")
         self.ids = {}
@@ -568,15 +574,19 @@ class TISE:
             initialdir=self.default_directory,
             title=s.UI_SAVEJSON,
             filetypes=[
-                (s.JSON_FILE, "*.json"),
+                (s.UI_SAVEFILE, s.OD_SAVEEXTS),
             ],
         )
-        logging.info("Saving JSON file: %s", file_path)
+        logging.info("Saving game file: %s", file_path)
         if not file_path:
             logging.warning("Not saving to blank file path!")
             return
-        with Path(file_path).open(mode="w", encoding=s.ENC) as fp:
-            fp.write(hackify_json(self.json_data))
+        if file_path.endswith(".gz"):
+            with gzip.open(file_path, mode="wb") as fp:
+                fp.write(hackify_json(self.json_data))
+        else:
+            with open(file_path, mode="wb") as fp:
+                fp.write(hackify_json(self.json_data))
 
     def _parse_json_data(self):
         """
@@ -997,16 +1007,23 @@ def app():
     """
     parser = argparse.ArgumentParser(description="TISE CLI")
     parser.add_argument("-v", action="count", default=0, help="Set the level of verbosity")
+    parser.add_argument("-l", action="store_true", default=False, help="Output logging to file")
     args = parser.parse_args()
+    logging_kwarg = s.LOGGING_OPTS_S
+    if args.l:
+        logging_kwarg.update(s.LOGGING_OPTS_D)
     verbosity = max(logging.WARNING - (int(args.v) * 10), logging.DEBUG)
     if verbosity == logging.INFO:
-        logging.basicConfig(level=logging.INFO, format=s.LOGGING_FMT)
+        logging.basicConfig(level=logging.INFO, **logging_kwarg)
     elif verbosity == logging.DEBUG:
-        logging.basicConfig(level=logging.DEBUG, format=s.LOGGING_FMT)
+        logging.basicConfig(level=logging.DEBUG, **logging_kwarg)
     else:
-        logging.basicConfig(level=logging.WARNING, format=s.LOGGING_FMT)
+        logging.basicConfig(level=logging.WARNING, **logging_kwarg)
+    logging.log(69, "%s Version %s%s", s.APP_NAME, s.APP_VERSION, s.APP_ENV)
     logging.log(verbosity, "<-- Set verbosity level")
-    logging.info(f"BASE_PATH = {s.BASE_PATH}")
+    logging.info("EXEC_PATH = %s", s.EXEC_PATH)
+    logging.info("BASE_PATH = %s", s.BASE_PATH)
+    logging.info("image check -> %s", s.GITHUB_LOGO.is_file())
     # Start app
     root = Tk()
     TISE(root)

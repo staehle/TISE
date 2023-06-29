@@ -1,16 +1,16 @@
 block_cipher = None
 
 open("_pyinstaller.py", "w").write("""
-import tise
+from tise import *
 
 if __name__ == "__main__":
-    tise.app()
+    app()
 """)
 
 a = Analysis(['_pyinstaller.py'],
              pathex=['.'],
              binaries=[],
-             datas=[('img/github-mark.png','.')],
+             datas=[('img/github-mark.png','img/')],
              hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],
