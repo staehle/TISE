@@ -103,9 +103,12 @@ class RelationalReference:
 
     def __init__(self, value: dict):
         self.reference = -1
+        self.type = None
         if s.RVAL in value.keys():
             if len(value.keys()) == 1 or (len(value.keys()) == 2 and s.RTYPE in value.keys()):
                 self.reference = value[s.RVAL]
+            if s.RTYPE in value.keys():
+                self.type = value[s.RTYPE]
 
     def is_reference(self) -> Union[bool, int]:
         """Is this a reference?"""
@@ -115,7 +118,12 @@ class RelationalReference:
 
     def to_reference(self) -> dict:
         """Return this back as a relational dict"""
-        return {s.RVAL: self.reference}
+        ret = {}
+        if self.reference > -1:
+            ret[s.RVAL] = self.reference
+        if self.type:
+            ret[s.RTYPE] = self.type
+        return ret
 
     def __str__(self) -> str:
         """Return this back as a json string"""
@@ -685,7 +693,7 @@ class TISE:
                 assert isinstance(values, dict), f"PJ: item values not dict? {type(values)}"
                 # Add to ID registry
                 assert iid not in self.ids, f"iid already in registry? {iid}"
-                inner_group = values[s.GTYPE]
+                inner_group = values[s.RTYPE]
                 assert inner_group == group, f"Mismatch: group {group} has item id {iid} with group {inner_group}?"
                 self.ids[iid] = (group, lidx)
                 logging.debug(

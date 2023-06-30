@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Application constants
 APP_NAME = "TISE: Terra Invicta Save Editor"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 APP_AUTHOR = "Jake Staehle <jacob@staehle.us>"
 APP_LINKTXT = "staehle/tise"
 APP_LINKURI = "https://github.com/staehle/tise"
@@ -99,7 +99,6 @@ RVAL = "value"  # relational value is lowercase
 RTYPE = "$type"
 DISPLAY_NAME = "displayName"
 ID = "id"
-GTYPE = "$type"
 
 PUBLICOPINION = "publicOpinion"
 PUBLICOPINION_VAR = "Undecided"
