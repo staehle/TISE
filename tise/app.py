@@ -427,7 +427,7 @@ class TISE:
         # +-Application----------------------------_-#-X-+
         # | menu_bar                                     |
         # +-Grid:--------+--------------+----------------+
-        # | LabelG       | LabelL       | LabelD         |
+        # | LabelG       | LabelL | StB | LabelD         |
         # +--------------+--------------+----------------+
         # | FrameG       | FrameL       | PanedWindowD   |
         # | [ListBox|SB] | [ListBox|SB] |                |
@@ -437,7 +437,13 @@ class TISE:
 
         # Labels and Frames
         self.label_g = Label(self.root, text=s.UI_LABEL_G, font=Font(size=12), justify="center")
-        self.label_l = Label(self.root, text=s.UI_LABEL_L, font=Font(size=12), justify="center")
+        # self
+        self.label_l = ttk.Frame(self.root, width=s.UI_LIST_WIDTH)
+        self.label_l_real = Label(self.label_l, text=s.UI_LABEL_L, font=Font(size=12), justify="center")
+        self.sort_button = Button(self.label_l, text=s.UI_SORT_BY_NAME, command=lambda: self._toggle_sort())
+        self.sort_by_id = False
+        self.label_l_real.pack(side="left", fill="both", expand=1)
+        self.sort_button.pack(side="right", fill="y")
         self.label_d = Label(self.root, text=s.UI_LABEL_D, font=Font(size=12), justify="center")
         self.frame_g = ttk.Frame(self.root, width=s.UI_LIST_WIDTH)
         self.frame_l = ttk.Frame(self.root, width=s.UI_LIST_WIDTH)
@@ -661,6 +667,7 @@ class TISE:
         else:
             with open(file_path, mode="wb") as fp:
                 fp.write(hackify_json(self.json_data))
+        logging.info("Saving complete!")
 
     def _parse_json_data(self):
         """
@@ -696,8 +703,14 @@ class TISE:
                 inner_group = values[s.RTYPE]
                 assert inner_group == group, f"Mismatch: group {group} has item id {iid} with group {inner_group}?"
                 self.ids[iid] = (group, lidx)
+                display_name = str(values.get(s.DISPLAY_NAME, s.UNK))
                 logging.debug(
-                    "PARSE: Found item ID '%d' for group '%s'(%d) with %d values", iid, group, gidx, len(values)
+                    "PARSE: Found item ID '%d' for group '%s'(%d) with %d values (dn: '%s')",
+                    iid,
+                    group,
+                    gidx,
+                    len(values),
+                    display_name,
                 )
 
         # Refresh our listbox_g now: Add items to listbox_g alphabetically
@@ -719,7 +732,9 @@ class TISE:
             return
         selidx = selidx[0]
         group = str(self.listbox_g.get(selidx))
-        logging.info("SELGROUP: Selected listbox_g index %d: group '%s'", selidx, group)
+        logging.info(
+            "SELGROUP: Selected listbox_g index %d: group '%s'. sort_by_id: %s", selidx, group, self.sort_by_id
+        )
         self._refresh_status_bar(f"Refreshing group '{group}'")
         # Get our group from gamestates. Check given name first, then try prepending namespace
         try:
@@ -727,28 +742,49 @@ class TISE:
         except KeyError:
             group = f"{s.COMMON_NAMESPACE}{group}"
             listitems = self.json_data[s.GAMESTATES][group]
-        logging.info("SELGROUP: Found group with real name '%s' with %d objects", group, len(listitems))
-        objmap = {}
+        id_fmt = 3
         for item in listitems:
             assert isinstance(item, dict)
             iid = item[s.KEY][s.RVAL]
             assert isinstance(iid, int), f"SG: item id not int? {iid} ({type(iid)})"
+            id_fmt = max(id_fmt, len(str(iid)) + 1)
+
+        logging.info("SELGROUP: Found group with real name '%s' with %d objects (f: %d)", group, len(listitems), id_fmt)
+        # objmap: Keys are ID, value is str: display_name for group box
+        objmap: dict[int, str] = {}
+        for item in listitems:
+            iid = item[s.KEY][s.RVAL]
             values = item[s.VALUE]
             assert isinstance(values, dict), f"SG: item values not dict? {type(values)}"
-            display_name = str(values.get(s.DISPLAY_NAME, s.UNK))
-            assert iid in self.ids, f"SG: iid {iid} ({display_name}) not in registry?"
-            objmap[display_name] = iid
+            name = str(values.get(s.DISPLAY_NAME, s.UNK))
+            assert iid in self.ids, f"SG: iid {iid} ({name}) not in registry?"
+            display_name = f"{iid: >{id_fmt}}: {name}"
+            previous = objmap.get(iid)
+            if previous is not None:
+                err = f"Duplicate ID '{previous}' when trying to add new name '{display_name}'"
+                logging.error(err)
+                self._refresh_status_bar(f"ERROR: {err}")
+                return
+            objmap[iid] = display_name
+        if len(objmap) != len(listitems):
+            err = f"object map did not populate correctly, has {len(objmap)} items when listitems has {len(listitems)}"
+            logging.error(err)
+            self._refresh_status_bar(f"ERROR: {err}")
+            return
 
-        # Refresh our listbox_l now: Add items to listbox_l alphabetically.
-        # Use text of "iid:name" for `_select_listitem` below
         try:
-            for item in sorted(objmap):
-                self.listbox_l.insert("end", f"{objmap[item]:04}:{item}")
+            if self.sort_by_id:
+                et = "Sorted by ID"
+                for _, v in sorted(objmap.items()):
+                    self.listbox_l.insert("end", v)
+            else:
+                et = "Sorted by Name"
+                for _, v in sorted(objmap.items(), key=lambda t: t[1].partition(":")[2]):
+                    self.listbox_l.insert("end", v)
         except TypeError as err:
             logging.error(err)
             logging.error("Attempted sort of items in objmap: %s", str(objmap))
-
-        self._refresh_status_bar()
+        self._refresh_status_bar(et)
 
     def _select_listitem(self):
         """
@@ -1036,6 +1072,21 @@ class TISE:
         )
         # Refresh the details pane
         self._select_listitem()
+
+    def _toggle_sort(self):
+        if self.sort_by_id is True:
+            self.sort_by_id = False
+            self.sort_button.config(text=s.UI_SORT_BY_NAME)
+            et = "Now sorting by Name"
+        else:
+            self.sort_by_id = True
+            self.sort_button.config(text=s.UI_SORT_BY_IID)
+            et = "Now sorting by ID"
+        self._refresh_status_bar(et)
+        # Refresh group if needed:
+        if not self.listbox_g.curselection():
+            return
+        self._select_group()
 
     def go_to_ref(self, iid: int, executing_window: Optional[Toplevel] = None):
         """Navigate the user to the given IID. If given a window, destroy that window"""

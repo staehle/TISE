@@ -8,7 +8,7 @@ from pathlib import Path
 
 # Application constants
 APP_NAME = "TISE: Terra Invicta Save Editor"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.0"
 APP_AUTHOR = "Jake Staehle <jacob@staehle.us>"
 APP_LINKTXT = "staehle/tise"
 APP_LINKURI = "https://github.com/staehle/tise"
@@ -64,6 +64,9 @@ UI_ABOUT = "About"
 UI_LABEL_G = "Groups"
 UI_LABEL_L = "List"
 UI_LABEL_D = "Details"
+
+UI_SORT_BY_NAME = "Sort: Name"
+UI_SORT_BY_IID = "Sort: ID"
 
 UI_KEY = "Property"
 UI_VAL = "Value"
