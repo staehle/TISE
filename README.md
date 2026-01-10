@@ -1,49 +1,60 @@
 # TISE: Terra Invicta Save Editor
 
-Howdy. This is a save game editor for Terra Invicta. This tool uses Python and tkinter to help display and modify uncompressed save files.
+A fast, cross-platform save editor for Terra Invicta, written in Rust.
 
-### Disclaimer
+## Disclaimer
 
-This software is provided as-is. Please ensure you backup your save files before making changes to avoid any loss of data. Use at your own risk.
+This software is provided as-is. Please back up your save files before making changes. Use at your own risk.
+
+Game version note: Terra Invicta versions `0.4.60` to `0.4.63` can produce corrupted save files, and TISE may be unable to open them.
 
 ## Features
 
-- Supports both compressed and uncompressed save files
-- Supports ALL object types within Terra Invicta. Load any object in your save game for editing.
-- All data types are editable! Dictionaries have some display help for editing as well. For complex objects such as lists or nested dictionaries, they are modifyable in their raw JSON format.
-- Specific support for TI object types:
-  - Faction opinion/influence percentages ("publicOpinion" within a "TINationState" object): Will auto-calculate the "undecided" percentage to ensure they all add up to 1.
-- References to other objects include a handy "Go to Ref" button to auto-navigate you to them.
-- Saved game formatting should be 1:1 identical to original save files, including quirks.
-- Easy navigation with "Go to Ref" functionality, and Back/Forward buttons (bound to mouse buttons as well)
+- **Robust File Support**
+    - Reads and writes Terra Invicta uncompressed `.json` and compressed `.gz` saves.
+    - Supports JSON5 features used by the game (`Infinity`, `NaN`, comments, trailing commas).
+    - Preserves Terra Invicta save formatting quirks; loading and saving without edits should produce identical output.
+- **Navigation & Search**
+    - Browse the game state via **Groups** and **Objects**.
+    - **Search Items**: deep scan all keys and values.
+    - **Search References**: find objects by ID or name.
+    - **Go to ID**: jump directly to an object by its integer ID.
+    - **Go to Ref**: one-click navigation for relational references (e.g. `{ value: 12345 }`).
+    - **History**: navigate Back (`Alt+Left`) and Forward (`Alt+Right`).
+- **Editing**
+    - Edit values (booleans, numbers, strings) directly.
+    - Edit complex objects/arrays in the object editor or as JSON text.
+    - Undo/Redo support.
+    - Special-case helper: public opinion editing will auto-calculate the remaining “Undecided” value so the total sums to 1.
+- **Performance & UI**
+    - Handles large saves smoothly.
+    - Cross-platform native UI powered by `egui`.
+    - Light/Dark theme toggle.
 
 ## Usage
 
-Get the latest `tise.exe` from the GitHub Releases ->
-
-To start editing your Terra Invicta save game file, click "Load Game", open your save game. You can then navigate through the different groups of game objects.
+- Download the latest release binary from GitHub Releases.
+- Open TISE, click **Load Game**, and select your save file.
+- Navigate via **Groups** → **Objects**, then edit properties.
+- Use **Save Property** (per-field) and **Save JSON** (write the modified save).
 
 ### Public Opinion editing example
 
-For example, to edit a nation, select "TINationState", pick a nation, then to edit public opinion for each faction, select the item "publicOpinion":
+To edit a nation, select **TINationState**, pick a nation, then select the **publicOpinion** property:
 
 ![publicOpinion](img/publicOpinion.png)
 
-There's no error checking, so you're responsible for making sure you don't go over 1.0 here -- it'll calculate the remaining "Undecided" faction number for you though. This is the only special attribute I added support for.
-
-Click "Save Property" when done, then "Save JSON" at the top to save your new save file somewhere.
+You can edit any of the values manually or click-and-drag the handy pie chart. TISE will compute the remaining **Undecided** value for you.
 
 ### Editing a faction example
 
-To edit factions, select "TIFactionState" and pick a faction. For example, to edit the resources a faction has, select the "resources" property:
+To edit factions, select **TIFactionState** and pick a faction. For example, to edit faction resources, select the **resources** property:
 
 ![faction editing](img/factionedit.png)
 
-Click "Save Property" when done, then "Save JSON" at the top to save your new save file somewhere.
+## Object References and Technical Explanation
 
-### Object References and Technical Explanation
-
-The save game file is a JSON formatted file that uses a type of "relational JSON objects" -- each object has a unique ID number, and are sorted into various groups. These objects can have relationships to other objects, enabling a complex and richly connected data structure. Each object has this structure:
+Terra Invicta save files are JSON and behave like “relational JSON objects”: each object has a unique integer ID and lives inside a type-group. Objects can reference other objects by embedding a dictionary containing a special `value` field:
 
 ```json
 "OurGroupName": [
@@ -76,32 +87,24 @@ Each object within a group is guaranteed to always have the same properties with
 
 ![refex1](img/refex1.png) --> ![refex2](img/refex2.png)
 
-For a practical example in this save game, ID 3262 is an object in the "TIControlPoint" group. It has a property named "faction", which is the faction it belongs to. However, the value of this property isn't "the Academy" -- instead it's ID 4020. (The application only lists the name of the referenced object in the third "Reference" column for convenience.) If you click the "Go to Ref" button, you will be brought to where object ID 4020 lives, which in this save game is in the "TIFactionState" group, belonging to "the Academy".
+For a practical example in this save game, ID 3861 is an object in the "TIControlPoint" group (Canada's Executive Control Point). It has a property named "faction", which is the faction it belongs to. However, the value of this property isn't "the Academy" -- instead it is `{"value":4817}`. If you click the "Go" button next to any reference type, you will be brought to the Properties panel for that ID, which in this save game is in the "TIFactionState" group, belonging to "the Academy".
 
-## Building Yourself
+## Build & Run
 
-If you would rather build the TISE app from source, you need:
+Install Rust: https://rustup.rs/
 
-- Python 3.8+
-- Poetry
-
-To test local changes:
-
-```
-poetry update
-poetry run tise
+```bash
+cargo run --release
 ```
 
-To see more verbose logging:
+## Development
 
-```
-poetry run tise -vv
-```
+This repo uses `rustfmt` and `clippy`.
 
-To build a standalone executable:
-
-```
-poetry run pyinstaller --clean -y .\pyinstaller.spec
+```bash
+cargo fmt --all
+cargo clippy --all-targets -- -D warnings
+cargo test
 ```
 
 ## License

@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "tise2: test",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "test"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": "test"
+    },
+    {
+      "label": "tise2: clippy (deny warnings)",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "clippy",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "tise2: fmt (check)",
+      "type": "shell",
+      "command": "cargo",
+      "args": [
+        "fmt",
+        "--",
+        "--check"
+      ],
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
+}
