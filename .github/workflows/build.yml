@@ -1,0 +1,106 @@
+name: Build
+
+on:
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    name: Build Windows (x86_64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      - name: Stage artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item -Force target\x86_64-pc-windows-msvc\release\tise.exe dist\tise-windows-x86_64.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/tise-windows-x86_64.exe
+          if-no-files-found: error
+
+  build-linux-gnu:
+    name: Build Linux glibc (x86_64)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            binutils \
+            libx11-dev \
+            libx11-xcb-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
+
+      - name: Build (release)
+        run: cargo build --release --locked
+
+      - name: Stage artifact
+        run: |
+          mkdir -p dist
+          cp target/release/tise dist/tise-linux-x86_64-gnu
+          chmod +x dist/tise-linux-x86_64-gnu
+
+      - name: Verify GLIBC compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="dist/tise-linux-x86_64-gnu"
+
+          echo "::group::ldd output"
+          ldd "$bin" || true
+          echo "::endgroup::"
+
+          # Determine the newest GLIBC symbol version the binary requires.
+          # Building on an older runner keeps this requirement low and maximizes distro compatibility.
+          max_glibc=$(objdump -T "$bin" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -n1 || true)
+          echo "Max GLIBC required: ${max_glibc:-<none>}"
+          if [[ -z "${max_glibc}" ]]; then
+            echo "No GLIBC symbol versions found (unexpected for a GNU build)."
+            exit 1
+          fi
+
+          # ubuntu-22.04 ships glibc 2.35; requiring newer likely breaks older distros.
+          allowed="GLIBC_2.35"
+          newest=$(printf '%s\n' "$allowed" "$max_glibc" | sort -V | tail -n1)
+          if [[ "$newest" != "$allowed" ]]; then
+            echo "Binary requires $max_glibc, which is newer than allowed $allowed"
+            exit 1
+          fi
+          echo "OK: $max_glibc <= $allowed"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-gnu
+          path: dist/tise-linux-x86_64-gnu
+          if-no-files-found: error
