@@ -1,0 +1,1427 @@
+{
+    "currentID": {
+        "value": 4458
+    },
+    "gamestates": {
+        "PavonisInteractive.TerraInvicta.TITimeState": [
+            {
+                "Key": {
+                    "value": 1260
+                },
+                "Value": {
+                    "daysInCampaign": 0,
+                    "currentDateTime": {
+                        "year": 2022,
+                        "month": 10,
+                        "day": 1,
+                        "hour": 0,
+                        "minute": 0,
+                        "second": 0,
+                        "millisecond": 0
+                    },
+                    "archived": false,
+                    "ID": {
+                        "value": 1260
+                    },
+                    "exists": true,
+                    "templateName": "ModernDayStart",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TITimeState"
+                }
+            }
+        ],
+        "PavonisInteractive.TerraInvicta.TIArmyState": [
+            {
+                "Key": {
+                    "value": 3768
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2746
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3768",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3768",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3768",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2746
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 5,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 3rd Infantry Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3768
+                    },
+                    "exists": true,
+                    "templateName": "USAInfantryDixie",
+                    "displayName": "3rd Infantry Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3769
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2521
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3769",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3769",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3769",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2737
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 4,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 2nd Infantry Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3769
+                    },
+                    "exists": true,
+                    "templateName": "USAInfantryKorea",
+                    "displayName": "2nd Infantry Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3770
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2800
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3770",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3770",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3770",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2800
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 2nd Marine Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3770
+                    },
+                    "exists": true,
+                    "templateName": "USAMarinesDixie",
+                    "displayName": "2nd Marine Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3771
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2728
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3771",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3771",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3771",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2728
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 2,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1st Marine Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3771
+                    },
+                    "exists": true,
+                    "templateName": "USAMarinesCalifornia",
+                    "displayName": "1st Marine Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3772
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2809
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3772",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3772",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3772",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2809
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 1,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1st Armored Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3772
+                    },
+                    "exists": true,
+                    "templateName": "USAArmoredTexas",
+                    "displayName": "1st Armored Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3773
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2755
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3773",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3773",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3773",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2755
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 0,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1st Infantry Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3773
+                    },
+                    "exists": true,
+                    "templateName": "USAInfantryHighPlains",
+                    "displayName": "1st Infantry Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3774
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2674
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3774",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3774",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3774",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2674
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1st Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3774
+                    },
+                    "exists": true,
+                    "templateName": "GBRArmoredEngland",
+                    "displayName": "1st Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3775
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1765
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3775",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3775",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3775",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1765
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1re Division Blindee",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3775
+                    },
+                    "exists": true,
+                    "templateName": "EUABlindeeFrance",
+                    "displayName": "1re Division Blindee",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3776
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2647
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3776",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3776",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3776",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 3106
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 0.25,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1st Guards Tank Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3776
+                    },
+                    "exists": true,
+                    "templateName": "RUSTankPetersburg",
+                    "displayName": "1st Guards Tank Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3777
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2647
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3777",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3777",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3777",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2422
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 0.55,
+                    "controlPointIdx": 2,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 8th Guards Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3777
+                    },
+                    "exists": true,
+                    "templateName": "RUSGuardsRostovskaya",
+                    "displayName": "8th Guards Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3778
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2413
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3778",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3778",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3778",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2413
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 1,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 20th Guards Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3778
+                    },
+                    "exists": true,
+                    "templateName": "RUSArmyMoskva",
+                    "displayName": "20th Guards Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3779
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1540
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3779",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3779",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3779",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1540
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 5,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 79th Group Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3779
+                    },
+                    "exists": true,
+                    "templateName": "CHNArmyManchuria",
+                    "displayName": "79th Group Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3780
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1531
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3780",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3780",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3780",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1531
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 4,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 81st Group Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3780
+                    },
+                    "exists": true,
+                    "templateName": "CHNArmyNanjing",
+                    "displayName": "81st Group Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3781
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1594
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3781",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3781",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3781",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1594
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Naval",
+                    "strength": 1.0,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 73rd Group Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3781
+                    },
+                    "exists": true,
+                    "templateName": "CHNArmyShanghai",
+                    "displayName": "73rd Group Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3782
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1558
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3782",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3782",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3782",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1558
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 2,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 74th Group Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3782
+                    },
+                    "exists": true,
+                    "templateName": "CHNArmyWuhan",
+                    "displayName": "74th Group Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3783
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1927
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3783",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3783",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3783",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1945
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 4,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "XVI Corps",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3783
+                    },
+                    "exists": true,
+                    "templateName": "INDArmyJammu",
+                    "displayName": "XVI Corps",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3784
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1900
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3784",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3784",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3784",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1936
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "IV Corps",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3784
+                    },
+                    "exists": true,
+                    "templateName": "INDArmyAssam",
+                    "displayName": "IV Corps",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3785
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1918
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3785",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3785",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3785",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1918
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 2,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "X Corps",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3785
+                    },
+                    "exists": true,
+                    "templateName": "INDArmyKashmir",
+                    "displayName": "X Corps",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3786
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2332
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3786",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3786",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3786",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2332
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 2,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "II Strike Corps",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3786
+                    },
+                    "exists": true,
+                    "templateName": "PAKArmyPunjab",
+                    "displayName": "II Strike Corps",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3787
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2269
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3787",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3787",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3787",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2269
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 0,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 820th Armored Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3787
+                    },
+                    "exists": true,
+                    "templateName": "PRKArmy",
+                    "displayName": "820th Armored Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3788
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2908
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3788",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3788",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3788",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2908
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 1,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 36th Armored Division",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3788
+                    },
+                    "exists": true,
+                    "templateName": "ISRArmyCombined",
+                    "displayName": "36th Armored Division",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3789
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2521
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3789",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3789",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3789",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2521
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1st Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3789
+                    },
+                    "exists": true,
+                    "templateName": "KORArmy",
+                    "displayName": "1st Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3790
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2611
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3790",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3790",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3790",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2602
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 3,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 2nd Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3790
+                    },
+                    "exists": true,
+                    "templateName": "TURArmy",
+                    "displayName": "2nd Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3791
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 1657
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3791",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3791",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3791",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 1657
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 2,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 1st Field Army",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3791
+                    },
+                    "exists": true,
+                    "templateName": "EGYArmy",
+                    "displayName": "1st Field Army",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 3792
+                },
+                "Value": {
+                    "currentRegion": {
+                        "value": 2017
+                    },
+                    "embarkDate": null,
+                    "destinationSeaDate": null,
+                    "armyDamageEventName": "VisualizeArmyDamage3792",
+                    "armyStatusUpdateEventName": "ArmyStatusUpdate3792",
+                    "armyOperationCompleteEventName": "ArmyOperationComplete3792",
+                    "faction": null,
+                    "homeRegion": {
+                        "value": 2017
+                    },
+                    "priorRegion": null,
+                    "deploymentType": "Standard",
+                    "strength": 1.0,
+                    "controlPointIdx": 2,
+                    "createdFromTemplate": true,
+                    "currentOperations": [],
+                    "operationTarget": null,
+                    "destroyed": false,
+                    "armyType": "Human",
+                    "gameStateSubjectCreated": true,
+                    "displayNameWithArticle": "the 92nd Armored",
+                    "destinationQueue": [],
+                    "archived": false,
+                    "ID": {
+                        "value": 3792
+                    },
+                    "exists": true,
+                    "templateName": "IRNArmy",
+                    "displayName": "92nd Armored",
+                    "$type": "PavonisInteractive.TerraInvicta.TIArmyState"
+                }
+            }
+        ],
+        "PavonisInteractive.TerraInvicta.TITimeEvent": [
+            {
+                "Key": {
+                    "value": 4013
+                },
+                "Value": {
+                    "triggerTime": {
+                        "year": 2022,
+                        "month": 10,
+                        "day": 2,
+                        "hour": 0,
+                        "minute": 0,
+                        "second": 0,
+                        "millisecond": 0
+                    },
+                    "eventObjectID": {
+                        "value": 0
+                    },
+                    "eventObject2ID": {
+                        "value": 0
+                    },
+                    "eventDataTemplateName": null,
+                    "eventName": "DailyUpdate",
+                    "repeatType": "Day",
+                    "timeStep": 1,
+                    "stopClock": true,
+                    "pauseTime": false,
+                    "combatEvent": false,
+                    "isComplete": false,
+                    "repeatChangeTriggered": false,
+                    "archived": false,
+                    "ID": {
+                        "value": 4013
+                    },
+                    "exists": true,
+                    "templateName": "DateUpdate",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TITimeEvent"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4014
+                },
+                "Value": {
+                    "triggerTime": {
+                        "year": 2022,
+                        "month": 10,
+                        "day": 8,
+                        "hour": 6,
+                        "minute": 0,
+                        "second": 0,
+                        "millisecond": 0
+                    },
+                    "eventObjectID": {
+                        "value": 0
+                    },
+                    "eventObject2ID": {
+                        "value": 0
+                    },
+                    "eventDataTemplateName": null,
+                    "eventName": "CouncilorMissionUpdate",
+                    "repeatType": "WeekToMonth",
+                    "timeStep": 1,
+                    "stopClock": true,
+                    "pauseTime": true,
+                    "combatEvent": false,
+                    "isComplete": false,
+                    "repeatChangeTriggered": false,
+                    "archived": false,
+                    "ID": {
+                        "value": 4014
+                    },
+                    "exists": true,
+                    "templateName": "CouncilorMissionUpdate",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TITimeEvent"
+                }
+            }
+        ],
+        "PavonisInteractive.TerraInvicta.TIPlayerState": [
+            {
+                "Key": {
+                    "value": 4023
+                },
+                "Value": {
+                    "isAI": false,
+                    "faction": {
+                        "value": 4015
+                    },
+                    "name": "ResistPlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4023
+                    },
+                    "exists": true,
+                    "templateName": "ResistPlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4024
+                },
+                "Value": {
+                    "isAI": true,
+                    "faction": {
+                        "value": 4016
+                    },
+                    "name": "DestroyPlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4024
+                    },
+                    "exists": true,
+                    "templateName": "DestroyPlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4025
+                },
+                "Value": {
+                    "isAI": true,
+                    "faction": {
+                        "value": 4017
+                    },
+                    "name": "ExploitPlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4025
+                    },
+                    "exists": true,
+                    "templateName": "ExploitPlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4026
+                },
+                "Value": {
+                    "isAI": true,
+                    "faction": {
+                        "value": 4018
+                    },
+                    "name": "SubmitPlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4026
+                    },
+                    "exists": true,
+                    "templateName": "SubmitPlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4027
+                },
+                "Value": {
+                    "isAI": true,
+                    "faction": {
+                        "value": 4019
+                    },
+                    "name": "AppeasePlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4027
+                    },
+                    "exists": true,
+                    "templateName": "AppeasePlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4028
+                },
+                "Value": {
+                    "isAI": true,
+                    "faction": {
+                        "value": 4020
+                    },
+                    "name": "CooperatePlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4028
+                    },
+                    "exists": true,
+                    "templateName": "CooperatePlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4029
+                },
+                "Value": {
+                    "isAI": true,
+                    "faction": {
+                        "value": 4021
+                    },
+                    "name": "EscapePlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4029
+                    },
+                    "exists": true,
+                    "templateName": "EscapePlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4030
+                },
+                "Value": {
+                    "isAI": true,
+                    "faction": {
+                        "value": 4022
+                    },
+                    "name": "AlienPlayer",
+                    "archived": false,
+                    "ID": {
+                        "value": 4030
+                    },
+                    "exists": true,
+                    "templateName": "AlienPlayer",
+                    "displayName": null,
+                    "$type": "PavonisInteractive.TerraInvicta.TIPlayerState"
+                }
+            }
+        ],
+        "PavonisInteractive.TerraInvicta.TIWarState": [
+            {
+                "Key": {
+                    "value": 4141
+                },
+                "Value": {
+                    "attacker": {
+                        "value": 3619
+                    },
+                    "defender": {
+                        "value": 3719
+                    },
+                    "startDate": {
+                        "year": 2022,
+                        "month": 9,
+                        "day": 30,
+                        "hour": 23,
+                        "minute": 59,
+                        "second": 59,
+                        "millisecond": 0
+                    },
+                    "nukedRegions": [],
+                    "dateOfLastFighting": {
+                        "year": 2022,
+                        "month": 9,
+                        "day": 30,
+                        "hour": 23,
+                        "minute": 59,
+                        "second": 59,
+                        "millisecond": 0
+                    },
+                    "peaceOfferHistory": {},
+                    "_attackingAlliance": [
+                        {
+                            "value": 3619
+                        }
+                    ],
+                    "_defendingAlliance": [
+                        {
+                            "value": 3719
+                        }
+                    ],
+                    "archived": false,
+                    "ID": {
+                        "value": 4141
+                    },
+                    "exists": true,
+                    "templateName": null,
+                    "displayName": "Russia-Ukraine War",
+                    "$type": "PavonisInteractive.TerraInvicta.TIWarState"
+                }
+            }
+        ],
+        "PavonisInteractive.TerraInvicta.TIFederationState": [
+            {
+                "Key": {
+                    "value": 4142
+                },
+                "Value": {
+                    "members": [
+                        {
+                            "value": 3402
+                        },
+                        {
+                            "value": 3664
+                        },
+                        {
+                            "value": 3413
+                        },
+                        {
+                            "value": 3470
+                        },
+                        {
+                            "value": 3297
+                        },
+                        {
+                            "value": 3464
+                        },
+                        {
+                            "value": 3371
+                        },
+                        {
+                            "value": 3374
+                        },
+                        {
+                            "value": 3588
+                        },
+                        {
+                            "value": 3259
+                        },
+                        {
+                            "value": 3613
+                        },
+                        {
+                            "value": 3680
+                        },
+                        {
+                            "value": 3418
+                        },
+                        {
+                            "value": 3592
+                        },
+                        {
+                            "value": 3439
+                        },
+                        {
+                            "value": 3397
+                        },
+                        {
+                            "value": 3556
+                        },
+                        {
+                            "value": 3283
+                        },
+                        {
+                            "value": 3315
+                        },
+                        {
+                            "value": 3645
+                        }
+                    ],
+                    "federationName": "EUAFed",
+                    "flagResource": "nationflags/European_Union",
+                    "displayNameWithArticle": "the European Union",
+                    "displayNameWithArticleCapitalized": "The European Union",
+                    "adjective": "European",
+                    "archived": false,
+                    "ID": {
+                        "value": 4142
+                    },
+                    "exists": true,
+                    "templateName": null,
+                    "displayName": "European Union",
+                    "$type": "PavonisInteractive.TerraInvicta.TIFederationState"
+                }
+            },
+            {
+                "Key": {
+                    "value": 4143
+                },
+                "Value": {
+                    "members": [
+                        {
+                            "value": 3619
+                        },
+                        {
+                            "value": 3492
+                        },
+                        {
+                            "value": 3292
+                        },
+                        {
+                            "value": 3270
+                        },
+                        {
+                            "value": 3502
+                        }
+                    ],
+                    "federationName": "RUSFed",
+                    "flagResource": "nationflags/Eurasian_Union",
+                    "displayNameWithArticle": "the Eurasian Union",
+                    "displayNameWithArticleCapitalized": "The Eurasian Union",
+                    "adjective": "Eurasian",
+                    "archived": false,
+                    "ID": {
+                        "value": 4143
+                    },
+                    "exists": true,
+                    "templateName": null,
+                    "displayName": "Eurasian Union",
+                    "$type": "PavonisInteractive.TerraInvicta.TIFederationState"
+                }
+            }
+        ]
+    }
+}

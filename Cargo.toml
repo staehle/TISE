@@ -1,0 +1,41 @@
+[package]
+name = "tise"
+description = "TISE: Terra Invicta Save Editor"
+authors = ["Jake Staehle <jacob@staehle.us>"]
+homepage = "https://github.com/staehle/tise"
+repository = "https://github.com/staehle/tise"
+license-file = "LICENSE"
+categories = ["games"]
+version = "2.0.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# Ergonomic error handling for IO/parse/GUI glue.
+anyhow = "1.0"
+# Cross-platform native GUI shell for egui.
+eframe = "0.33"
+# Optional egui widgets/utilities (tables, etc.).
+egui_extras = "0.33"
+# Gzip read/write for `.gz` save files.
+flate2 = "1.0"
+# JSON object map preserving insertion order (important for stable structure/editing).
+indexmap = { version = "2.13", features = ["serde"] }
+# JSON5 parser (supports `Infinity`, comments, trailing commas, etc.).
+json5 = "1.3"
+# Native file open/save dialogs.
+rfd = "0.17"
+# Fast float-to-string for deterministic JSON number formatting.
+ryu = "1.0"
+# Serialization framework (we use custom value types + derive where useful).
+serde = { version = "1.0", features = ["derive"] }
+# Structured error types (used where errors are part of the API surface).
+thiserror = "2.0"
+
+[dev-dependencies]
+# Nicer diffs for byte-for-byte roundtrip assertion failures.
+pretty_assertions = "1.4"
+# Temp dirs/files for test fixtures.
+tempfile = "3.24"
