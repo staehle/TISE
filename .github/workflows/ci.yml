@@ -1,21 +1,18 @@
-name: CI
+name: PremergeCI
 
 on:
-  push:
   pull_request:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: fmt + clippy + test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+  build:
+    uses: ./.github/workflows/build.yml
 
+  test:
+    name: fmt + clippy + test
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
