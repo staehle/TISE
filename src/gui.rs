@@ -4689,270 +4689,304 @@ impl eframe::App for TiseApp {
 
         let mut org_add_faction_request: Option<i64> = None;
 
-        egui::SidePanel::left("objects_panel")
-            .resizable(true)
-            .default_width(360.0)
-            .show(ctx, |ui| {
-                ui.heading(statics::EN_HEADING_OBJECTS);
-                ui.separator();
+        // Singleton groups (e.g. TIGlobalResearchState) have nothing to pick from, so
+        // select their only object and skip the objects pane.
+        let singleton_object = self.selected_group.as_ref().and_then(|g| {
+            match objects_by_group.get(g).map(Vec::as_slice) {
+                Some([only]) => Some((g.clone(), only.id)),
+                _ => None,
+            }
+        });
+        if let Some((group, id)) = &singleton_object
+            && self.selected_object_id != Some(*id)
+        {
+            self.select_object_internal(group, *id, false, false, false);
+        }
 
-                ui.horizontal(|ui| {
-                    ui.label(statics::EN_LABEL_SORT);
-                    ui.selectable_value(&mut self.sort_objects_by_id, false, statics::EN_SORT_NAME);
-                    ui.selectable_value(&mut self.sort_objects_by_id, true, statics::EN_SORT_ID);
-                });
-                ui.separator();
-
-                let Some(group) = self.selected_group.clone() else {
-                    ui.label(statics::EN_SELECT_GROUP);
-                    return;
-                };
-
-                if group == statics::TI_GROUP_HAB_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
-                        .map(|v| v.iter().collect())
-                        .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.hab_faction_filter,
-                        id_to_display_name,
-                        "hab_faction_filter",
-                    );
-                    ui.separator();
-                }
-
-                if group == statics::TI_GROUP_COUNCILOR_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
-                        .map(|v| v.iter().collect())
-                        .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.councilor_faction_filter,
-                        id_to_display_name,
-                        "councilor_faction_filter",
-                    );
-                    ui.separator();
-                }
-
-                if group == statics::TI_GROUP_ORG_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
-                        .map(|v| v.iter().collect())
-                        .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_org_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.org_faction_filter,
-                        id_to_display_name,
-                        "org_faction_filter",
-                    );
-                    Self::render_tier_filter_combobox(
-                        ui,
-                        &mut self.org_tier_filter,
-                        &[1, 2, 3, 4, 5],
-                        "org_tier_filter",
-                    );
+        if singleton_object.is_none() {
+            egui::SidePanel::left("objects_panel")
+                .resizable(true)
+                .default_width(360.0)
+                .show(ctx, |ui| {
+                    ui.heading(statics::EN_HEADING_OBJECTS);
                     ui.separator();
 
                     ui.horizontal(|ui| {
-                        ui.label(statics::EN_LABEL_ADD_TO_FACTION);
-                        let selected_label = self
-                            .org_add_faction_target
-                            .and_then(|id| id_to_display_name.get(&id))
-                            .cloned()
-                            .unwrap_or_else(|| statics::EN_FILTER_SELECT_FACTION.to_string());
-                        egui::ComboBox::from_id_salt("org_add_faction_target")
-                            .selected_text(selected_label)
-                            .show_ui(ui, |ui| {
-                                for faction in &factions {
+                        ui.label(statics::EN_LABEL_SORT);
+                        ui.selectable_value(
+                            &mut self.sort_objects_by_id,
+                            false,
+                            statics::EN_SORT_NAME,
+                        );
+                        ui.selectable_value(
+                            &mut self.sort_objects_by_id,
+                            true,
+                            statics::EN_SORT_ID,
+                        );
+                    });
+                    ui.separator();
+
+                    let Some(group) = self.selected_group.clone() else {
+                        ui.label(statics::EN_SELECT_GROUP);
+                        return;
+                    };
+
+                    if group == statics::TI_GROUP_HAB_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.hab_faction_filter,
+                            id_to_display_name,
+                            "hab_faction_filter",
+                        );
+                        ui.separator();
+                    }
+
+                    if group == statics::TI_GROUP_COUNCILOR_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.councilor_faction_filter,
+                            id_to_display_name,
+                            "councilor_faction_filter",
+                        );
+                        ui.separator();
+                    }
+
+                    if group == statics::TI_GROUP_ORG_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_org_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.org_faction_filter,
+                            id_to_display_name,
+                            "org_faction_filter",
+                        );
+                        Self::render_tier_filter_combobox(
+                            ui,
+                            &mut self.org_tier_filter,
+                            &[1, 2, 3, 4, 5],
+                            "org_tier_filter",
+                        );
+                        ui.separator();
+
+                        ui.horizontal(|ui| {
+                            ui.label(statics::EN_LABEL_ADD_TO_FACTION);
+                            let selected_label = self
+                                .org_add_faction_target
+                                .and_then(|id| id_to_display_name.get(&id))
+                                .cloned()
+                                .unwrap_or_else(|| statics::EN_FILTER_SELECT_FACTION.to_string());
+                            egui::ComboBox::from_id_salt("org_add_faction_target")
+                                .selected_text(selected_label)
+                                .show_ui(ui, |ui| {
+                                    for faction in &factions {
+                                        ui.selectable_value(
+                                            &mut self.org_add_faction_target,
+                                            Some(faction.id),
+                                            &faction.display_name,
+                                        );
+                                    }
+                                });
+                        });
+
+                        let selected_count = self.org_bulk_selected_ids.len();
+                        ui.label(format!(
+                            "{selected_count} {}",
+                            statics::EN_LABEL_ORGS_SELECTED
+                        ));
+
+                        let can_add = selected_count > 0 && self.org_add_faction_target.is_some();
+                        if ui
+                            .add_enabled(can_add, egui::Button::new(statics::EN_BTN_ADD_TO_FACTION))
+                            .clicked()
+                            && let Some(faction_id) = self.org_add_faction_target
+                        {
+                            org_add_faction_request = Some(faction_id);
+                        }
+                        ui.separator();
+                    }
+
+                    if group == statics::TI_GROUP_HAB_MODULE_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.hab_module_faction_filter,
+                            id_to_display_name,
+                            "hab_module_faction_filter",
+                        );
+                        ui.horizontal(|ui| {
+                            ui.label(statics::EN_LABEL_FILTER_CONSTRUCTION);
+                            egui::ComboBox::from_id_salt("hab_module_construction_filter")
+                                .selected_text(match self.hab_module_construction_filter {
+                                    HabModuleConstructionFilter::All => {
+                                        statics::EN_FILTER_CONSTRUCTION_ALL
+                                    }
+                                    HabModuleConstructionFilter::Completed => {
+                                        statics::EN_FILTER_CONSTRUCTION_COMPLETED
+                                    }
+                                    HabModuleConstructionFilter::InProgress => {
+                                        statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS
+                                    }
+                                })
+                                .show_ui(ui, |ui| {
                                     ui.selectable_value(
-                                        &mut self.org_add_faction_target,
-                                        Some(faction.id),
-                                        &faction.display_name,
+                                        &mut self.hab_module_construction_filter,
+                                        HabModuleConstructionFilter::All,
+                                        statics::EN_FILTER_CONSTRUCTION_ALL,
                                     );
-                                }
-                            });
-                    });
-
-                    let selected_count = self.org_bulk_selected_ids.len();
-                    ui.label(format!(
-                        "{selected_count} {}",
-                        statics::EN_LABEL_ORGS_SELECTED
-                    ));
-
-                    let can_add = selected_count > 0 && self.org_add_faction_target.is_some();
-                    if ui
-                        .add_enabled(can_add, egui::Button::new(statics::EN_BTN_ADD_TO_FACTION))
-                        .clicked()
-                        && let Some(faction_id) = self.org_add_faction_target
-                    {
-                        org_add_faction_request = Some(faction_id);
+                                    ui.selectable_value(
+                                        &mut self.hab_module_construction_filter,
+                                        HabModuleConstructionFilter::Completed,
+                                        statics::EN_FILTER_CONSTRUCTION_COMPLETED,
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.hab_module_construction_filter,
+                                        HabModuleConstructionFilter::InProgress,
+                                        statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS,
+                                    );
+                                });
+                        });
+                        ui.separator();
                     }
-                    ui.separator();
-                }
 
-                if group == statics::TI_GROUP_HAB_MODULE_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
+                    let mut objects: Vec<_> = objects_by_group
+                        .get(&group)
                         .map(|v| v.iter().collect())
                         .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.hab_module_faction_filter,
-                        id_to_display_name,
-                        "hab_module_faction_filter",
-                    );
-                    ui.horizontal(|ui| {
-                        ui.label(statics::EN_LABEL_FILTER_CONSTRUCTION);
-                        egui::ComboBox::from_id_salt("hab_module_construction_filter")
-                            .selected_text(match self.hab_module_construction_filter {
-                                HabModuleConstructionFilter::All => {
-                                    statics::EN_FILTER_CONSTRUCTION_ALL
-                                }
-                                HabModuleConstructionFilter::Completed => {
-                                    statics::EN_FILTER_CONSTRUCTION_COMPLETED
-                                }
-                                HabModuleConstructionFilter::InProgress => {
-                                    statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS
-                                }
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.hab_module_construction_filter,
-                                    HabModuleConstructionFilter::All,
-                                    statics::EN_FILTER_CONSTRUCTION_ALL,
-                                );
-                                ui.selectable_value(
-                                    &mut self.hab_module_construction_filter,
-                                    HabModuleConstructionFilter::Completed,
-                                    statics::EN_FILTER_CONSTRUCTION_COMPLETED,
-                                );
-                                ui.selectable_value(
-                                    &mut self.hab_module_construction_filter,
-                                    HabModuleConstructionFilter::InProgress,
-                                    statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS,
-                                );
-                            });
-                    });
-                    ui.separator();
-                }
 
-                let mut objects: Vec<_> = objects_by_group
-                    .get(&group)
-                    .map(|v| v.iter().collect())
-                    .unwrap_or_default();
-
-                if self.sort_objects_by_id {
-                    objects.sort_by_key(|o| o.id);
-                } else {
-                    objects.sort_by_key(|o| o.display_name.to_lowercase());
-                }
-
-                if group == statics::TI_GROUP_HAB_STATE
-                    && let Some(faction_id) = self.hab_faction_filter
-                {
-                    objects.retain(|obj| hab_faction_id(&save, obj.id) == Some(faction_id));
-                }
-
-                if group == statics::TI_GROUP_COUNCILOR_STATE
-                    && let Some(faction_id) = self.councilor_faction_filter
-                {
-                    objects.retain(|obj| councilor_faction_id(&save, obj.id) == Some(faction_id));
-                }
-
-                if group == statics::TI_GROUP_ORG_STATE {
-                    match self.org_faction_filter {
-                        OrgFactionFilter::All => {}
-                        OrgFactionFilter::NoFaction => {
-                            objects.retain(|obj| org_faction_id(&save, obj.id).is_none());
-                        }
-                        OrgFactionFilter::Faction(faction_id) => {
-                            objects.retain(|obj| org_faction_id(&save, obj.id) == Some(faction_id));
-                        }
+                    if self.sort_objects_by_id {
+                        objects.sort_by_key(|o| o.id);
+                    } else {
+                        objects.sort_by_key(|o| o.display_name.to_lowercase());
                     }
-                    if let Some(tier) = self.org_tier_filter {
-                        objects.retain(|obj| org_tier(&save, obj.id) == Some(tier));
-                    }
-                }
 
-                if group == statics::TI_GROUP_HAB_MODULE_STATE {
-                    if let Some(faction_id) = self.hab_module_faction_filter {
+                    if group == statics::TI_GROUP_HAB_STATE
+                        && let Some(faction_id) = self.hab_faction_filter
+                    {
+                        objects.retain(|obj| hab_faction_id(&save, obj.id) == Some(faction_id));
+                    }
+
+                    if group == statics::TI_GROUP_COUNCILOR_STATE
+                        && let Some(faction_id) = self.councilor_faction_filter
+                    {
                         objects
-                            .retain(|obj| hab_module_faction_id(&save, obj.id) == Some(faction_id));
+                            .retain(|obj| councilor_faction_id(&save, obj.id) == Some(faction_id));
                     }
-                    match self.hab_module_construction_filter {
-                        HabModuleConstructionFilter::All => {}
-                        HabModuleConstructionFilter::Completed => {
+
+                    if group == statics::TI_GROUP_ORG_STATE {
+                        match self.org_faction_filter {
+                            OrgFactionFilter::All => {}
+                            OrgFactionFilter::NoFaction => {
+                                objects.retain(|obj| org_faction_id(&save, obj.id).is_none());
+                            }
+                            OrgFactionFilter::Faction(faction_id) => {
+                                objects.retain(|obj| {
+                                    org_faction_id(&save, obj.id) == Some(faction_id)
+                                });
+                            }
+                        }
+                        if let Some(tier) = self.org_tier_filter {
+                            objects.retain(|obj| org_tier(&save, obj.id) == Some(tier));
+                        }
+                    }
+
+                    if group == statics::TI_GROUP_HAB_MODULE_STATE {
+                        if let Some(faction_id) = self.hab_module_faction_filter {
                             objects.retain(|obj| {
-                                hab_module_construction_completed(&save, obj.id) == Some(true)
+                                hab_module_faction_id(&save, obj.id) == Some(faction_id)
                             });
                         }
-                        HabModuleConstructionFilter::InProgress => {
-                            objects.retain(|obj| {
-                                hab_module_construction_completed(&save, obj.id) != Some(true)
-                            });
+                        match self.hab_module_construction_filter {
+                            HabModuleConstructionFilter::All => {}
+                            HabModuleConstructionFilter::Completed => {
+                                objects.retain(|obj| {
+                                    hab_module_construction_completed(&save, obj.id) == Some(true)
+                                });
+                            }
+                            HabModuleConstructionFilter::InProgress => {
+                                objects.retain(|obj| {
+                                    hab_module_construction_completed(&save, obj.id) != Some(true)
+                                });
+                            }
                         }
                     }
-                }
 
-                let row_h = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
-                ui.push_id("objects_scroll", |ui| {
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            for obj in objects {
-                                let selected = self.selected_object_id == Some(obj.id);
-                                let text = format!("{}: {}", obj.id, obj.display_name);
-                                let is_org_group = group == statics::TI_GROUP_ORG_STATE;
+                    let row_h = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
+                    ui.push_id("objects_scroll", |ui| {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                for obj in objects {
+                                    let selected = self.selected_object_id == Some(obj.id);
+                                    let text = format!("{}: {}", obj.id, obj.display_name);
+                                    let is_org_group = group == statics::TI_GROUP_ORG_STATE;
 
-                                let resp = if is_org_group {
-                                    let mut checked = self.org_bulk_selected_ids.contains(&obj.id);
-                                    ui.horizontal(|ui| {
-                                        if ui.checkbox(&mut checked, "").changed() {
-                                            if checked {
-                                                self.org_bulk_selected_ids.insert(obj.id);
-                                            } else {
-                                                self.org_bulk_selected_ids.remove(&obj.id);
+                                    let resp = if is_org_group {
+                                        let mut checked =
+                                            self.org_bulk_selected_ids.contains(&obj.id);
+                                        ui.horizontal(|ui| {
+                                            if ui.checkbox(&mut checked, "").changed() {
+                                                if checked {
+                                                    self.org_bulk_selected_ids.insert(obj.id);
+                                                } else {
+                                                    self.org_bulk_selected_ids.remove(&obj.id);
+                                                }
                                             }
-                                        }
+                                            Self::selectable_row_left(
+                                                ui,
+                                                selected,
+                                                text.as_str(),
+                                                row_h,
+                                            )
+                                        })
+                                        .inner
+                                    } else {
                                         Self::selectable_row_left(
                                             ui,
                                             selected,
                                             text.as_str(),
                                             row_h,
                                         )
-                                    })
-                                    .inner
-                                } else {
-                                    Self::selectable_row_left(ui, selected, text.as_str(), row_h)
-                                };
-
-                                if selected && self.scroll_objects_to_selected {
-                                    let align = if self.scroll_align_center {
-                                        egui::Align::Center
-                                    } else {
-                                        egui::Align::Min
                                     };
-                                    resp.scroll_to_me(Some(align));
-                                    self.scroll_objects_to_selected = false;
-                                    self.scroll_align_center = false;
+
+                                    if selected && self.scroll_objects_to_selected {
+                                        let align = if self.scroll_align_center {
+                                            egui::Align::Center
+                                        } else {
+                                            egui::Align::Min
+                                        };
+                                        resp.scroll_to_me(Some(align));
+                                        self.scroll_objects_to_selected = false;
+                                        self.scroll_align_center = false;
+                                    }
+                                    if resp.clicked() {
+                                        self.select_object_user(&group, obj.id);
+                                    }
                                 }
-                                if resp.clicked() {
-                                    self.select_object_user(&group, obj.id);
-                                }
-                            }
-                        });
+                            });
+                    });
                 });
-            });
+        }
 
         if let Some(faction_id) = org_add_faction_request {
             self.add_selected_orgs_to_faction(&mut save, faction_id);

@@ -196,16 +196,29 @@ impl LoadedSave {
         match name {
             "TIFactionState" | "TIPlayerState" | "TICouncilorState" | "TIOrgState"
             | "TIOfficerState" => GroupCategory::FactionsAndPeople,
-            "TINationState" | "TIControlPoint" | "TIArmyState" | "TIWarState"
-            | "TIFederationState" | "TIMegafaunaArmyState" => GroupCategory::Earth,
-            "TISpaceBodyState" | "TILagrangePointState" | "TIOrbitState" | "TISectorState"
-            | "TISpaceFleetState" | "TISpaceShipState" => GroupCategory::Space,
+            "TINationState"
+            | "TIControlPoint"
+            | "TIArmyState"
+            | "TIWarState"
+            | "TIFederationState"
+            | "TIMegafaunaArmyState" => GroupCategory::Earth,
+            "TISpaceBodyState"
+            | "TILagrangePointState"
+            | "TIOrbitState"
+            | "TISectorState"
+            | "TISpaceFleetState"
+            | "TISpaceShipState" => GroupCategory::Space,
             "TIMissionState" | "TIMissionPhaseState" | "TITimeEvent" => {
                 GroupCategory::MissionsAndEvents
             }
-            "TIMetadataState" | "TITimeState" | "TINotificationQueueState"
-            | "TIEffectsState" | "TIGlobalResearchState" | "TIGlobalValuesState"
-            | "TIPromptQueueState" | "TIHistoricalData" => GroupCategory::GlobalSystem,
+            "TIMetadataState"
+            | "TITimeState"
+            | "TINotificationQueueState"
+            | "TIEffectsState"
+            | "TIGlobalResearchState"
+            | "TIGlobalValuesState"
+            | "TIPromptQueueState"
+            | "TIHistoricalData" => GroupCategory::GlobalSystem,
             _ if name.starts_with("TIRegion") => GroupCategory::Earth,
             _ if name.starts_with("TIHab") || name.starts_with("TISpaceCombat") => {
                 GroupCategory::Space
