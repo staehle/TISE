@@ -3700,75 +3700,98 @@ impl TiseApp {
             .filter_map(|v| v.as_str().map(str::to_string))
             .collect();
 
-        ui.label(statics::EN_TRAIT_EDITOR_REMOVE_HINT);
+        const PANE_HEIGHT: f32 = 200.0;
         let mut remove: Option<usize> = None;
-        ui.horizontal_wrapped(|ui| {
-            for (i, name) in current.iter().enumerate() {
-                let duplicate = current[..i].contains(name);
-                let unknown = catalog.is_some_and(|c| !c.contains(name));
-                let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
-                let mut tip = None;
-                if duplicate {
-                    text = text.color(egui::Color32::LIGHT_RED);
-                    tip = Some(statics::EN_TRAIT_DUPLICATE);
-                } else if unknown {
-                    text = text.color(egui::Color32::ORANGE);
-                    tip = Some(statics::EN_TRAIT_UNKNOWN);
+        let mut add: Option<String> = None;
+
+        // Two side-by-side panes: what the councillor has, and what can be added.
+        ui.columns(2, |cols| {
+            cols[0].group(|ui| {
+                ui.strong(format!("{} ({})", statics::EN_TRAIT_CURRENT, current.len()));
+                ui.weak(statics::EN_TRAIT_EDITOR_REMOVE_HINT);
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .id_salt("trait_current")
+                    .min_scrolled_height(PANE_HEIGHT)
+                    .max_height(PANE_HEIGHT)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            for (i, name) in current.iter().enumerate() {
+                                let duplicate = current[..i].contains(name);
+                                let unknown = catalog.is_some_and(|c| !c.contains(name));
+                                let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
+                                let mut tip = None;
+                                if duplicate {
+                                    text = text.color(egui::Color32::LIGHT_RED);
+                                    tip = Some(statics::EN_TRAIT_DUPLICATE);
+                                } else if unknown {
+                                    text = text.color(egui::Color32::ORANGE);
+                                    tip = Some(statics::EN_TRAIT_UNKNOWN);
+                                }
+                                let mut resp = ui.button(text);
+                                if let Some(tip) = tip {
+                                    resp = resp.on_hover_text(tip);
+                                }
+                                if resp.clicked() {
+                                    remove = Some(i);
+                                }
+                            }
+                        });
+                    });
+            });
+
+            cols[1].group(|ui| {
+                ui.strong(statics::EN_TRAIT_ADD);
+                ui.add(
+                    egui::TextEdit::singleline(filter)
+                        .hint_text(statics::EN_TRAIT_SEARCH_HINT)
+                        .desired_width(f32::INFINITY),
+                );
+                ui.separator();
+
+                let needle = filter.trim().to_lowercase();
+                if let Some(catalog) = catalog {
+                    egui::ScrollArea::vertical()
+                        .id_salt("trait_picker")
+                        .min_scrolled_height(PANE_HEIGHT - 28.0)
+                        .max_height(PANE_HEIGHT - 28.0)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for name in catalog
+                                .iter()
+                                .filter(|n| !current.contains(n))
+                                .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
+                            {
+                                let row = egui::Button::new(format!("+  {name}"))
+                                    .frame(false)
+                                    .min_size(egui::vec2(ui.available_width(), 0.0));
+                                if ui.add(row).clicked() {
+                                    add = Some(name.clone());
+                                }
+                            }
+                        });
+                } else {
+                    ui.weak(statics::EN_TRAIT_NO_GAME_DATA);
                 }
-                let mut resp = ui.button(text);
-                if let Some(tip) = tip {
-                    resp = resp.on_hover_text(tip);
+
+                let typed = filter.trim();
+                let offer_typed = !typed.is_empty()
+                    && !current.iter().any(|n| n == typed)
+                    && !catalog.is_some_and(|c| c.iter().any(|n| n == typed));
+                if offer_typed
+                    && ui
+                        .button(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed))
+                        .clicked()
+                {
+                    add = Some(typed.to_string());
                 }
-                if resp.clicked() {
-                    remove = Some(i);
-                }
-            }
+            });
         });
+
         if let Some(i) = remove {
             arr.remove(i);
             changed = true;
-        }
-
-        ui.separator();
-        ui.add(
-            egui::TextEdit::singleline(filter)
-                .hint_text(statics::EN_TRAIT_SEARCH_HINT)
-                .desired_width(f32::INFINITY),
-        );
-
-        let needle = filter.trim().to_lowercase();
-        let mut add: Option<String> = None;
-        if let Some(catalog) = catalog {
-            egui::ScrollArea::vertical()
-                .id_salt("trait_picker")
-                .max_height(150.0)
-                .show(ui, |ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        for name in catalog
-                            .iter()
-                            .filter(|n| !current.contains(n))
-                            .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
-                        {
-                            if ui.small_button(name).clicked() {
-                                add = Some(name.clone());
-                            }
-                        }
-                    });
-                });
-        } else {
-            ui.weak(statics::EN_TRAIT_NO_GAME_DATA);
-        }
-
-        let typed = filter.trim();
-        let offer_typed = !typed.is_empty()
-            && !current.iter().any(|n| n == typed)
-            && !catalog.is_some_and(|c| c.iter().any(|n| n == typed));
-        if offer_typed
-            && ui
-                .button(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed))
-                .clicked()
-        {
-            add = Some(typed.to_string());
         }
 
         if let Some(name) = add {
