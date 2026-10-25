@@ -45,6 +45,14 @@ pub const EN_HOME_HEADING: &str = "TISE: Terra Invicta Save Editor";
 pub const EN_HOME_INSTRUCTIONS: &str = "Open a Terra Invicta save (.json/.gz) to begin.";
 
 pub const EN_HEADING_GROUPS: &str = "Groups";
+pub const EN_GROUP_CAT_FACTIONS_PEOPLE: &str = "Factions & People";
+pub const EN_GROUP_CAT_EARTH: &str = "Earth";
+pub const EN_GROUP_CAT_SPACE: &str = "Space";
+pub const EN_GROUP_CAT_FACILITIES: &str = "Facilities";
+pub const EN_GROUP_CAT_MISSIONS_EVENTS: &str = "Missions & Events";
+pub const EN_GROUP_CAT_AI_GOALS: &str = "AI Goals";
+pub const EN_GROUP_CAT_GLOBAL_SYSTEM: &str = "Global / System";
+pub const EN_GROUP_CAT_OTHER: &str = "Other";
 pub const EN_HEADING_OBJECTS: &str = "Objects";
 pub const EN_HEADING_PROPERTIES: &str = "Properties";
 pub const EN_HEADING_EDIT: &str = "Edit";

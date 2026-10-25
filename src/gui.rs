@@ -1,9 +1,13 @@
 use crate::diff::{self, IgnoreRules, SaveDiff};
 use crate::statics;
-use crate::{LoadedSave, TiValue};
+use crate::{GroupCategory, LoadedSave, TiValue};
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
-use std::{collections::BTreeSet, path::PathBuf, sync::OnceLock};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::OnceLock,
+};
 
 #[derive(Clone, Debug)]
 enum PublicOpinionDrag {
@@ -4621,34 +4625,63 @@ impl eframe::App for TiseApp {
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
+                            let mut by_category: BTreeMap<GroupCategory, Vec<&String>> =
+                                BTreeMap::new();
                             for group in &groups {
-                                let label = LoadedSave::group_display_name(group);
-                                let selected =
-                                    self.selected_group.as_deref() == Some(group.as_str());
-                                let resp = Self::selectable_row_left(ui, selected, label, row_h);
-                                if selected && self.scroll_groups_to_selected {
-                                    let align = if self.scroll_align_center {
-                                        egui::Align::Center
-                                    } else {
-                                        egui::Align::Min
-                                    };
-                                    resp.scroll_to_me(Some(align));
-                                    self.scroll_groups_to_selected = false;
-                                    self.scroll_align_center = false;
-                                }
-                                if resp.clicked() {
-                                    self.selected_group = Some(group.clone());
-                                    self.selected_object_id = None;
-                                    self.selected_property = None;
-                                    self.edit_buffer.clear();
-                                    self.raw_edit_mode = false;
-                                    self.scroll_groups_to_selected = false;
-                                    self.scroll_objects_to_selected = false;
-                                    self.scroll_properties_to_selected = false;
-                                    if group != statics::TI_GROUP_ORG_STATE {
-                                        self.org_bulk_selected_ids.clear();
+                                by_category
+                                    .entry(LoadedSave::group_category(group))
+                                    .or_default()
+                                    .push(group);
+                            }
+                            let selected_category = self
+                                .selected_group
+                                .as_deref()
+                                .map(LoadedSave::group_category);
+                            for (category, cat_groups) in by_category {
+                                // Expand the selected group's category so it can be scrolled to.
+                                let force_open = (self.scroll_groups_to_selected
+                                    && selected_category == Some(category))
+                                .then_some(true);
+                                egui::CollapsingHeader::new(format!(
+                                    "{} ({})",
+                                    category.label(),
+                                    cat_groups.len()
+                                ))
+                                .id_salt(("group_category", category))
+                                .default_open(true)
+                                .open(force_open)
+                                .show(ui, |ui| {
+                                    for group in cat_groups {
+                                        let label = LoadedSave::group_display_name(group);
+                                        let selected =
+                                            self.selected_group.as_deref() == Some(group.as_str());
+                                        let resp =
+                                            Self::selectable_row_left(ui, selected, label, row_h);
+                                        if selected && self.scroll_groups_to_selected {
+                                            let align = if self.scroll_align_center {
+                                                egui::Align::Center
+                                            } else {
+                                                egui::Align::Min
+                                            };
+                                            resp.scroll_to_me(Some(align));
+                                            self.scroll_groups_to_selected = false;
+                                            self.scroll_align_center = false;
+                                        }
+                                        if resp.clicked() {
+                                            self.selected_group = Some(group.clone());
+                                            self.selected_object_id = None;
+                                            self.selected_property = None;
+                                            self.edit_buffer.clear();
+                                            self.raw_edit_mode = false;
+                                            self.scroll_groups_to_selected = false;
+                                            self.scroll_objects_to_selected = false;
+                                            self.scroll_properties_to_selected = false;
+                                            if group != statics::TI_GROUP_ORG_STATE {
+                                                self.org_bulk_selected_ids.clear();
+                                            }
+                                        }
                                     }
-                                }
+                                });
                             }
                         });
                 });

@@ -15,5 +15,5 @@ pub use diff::{
     diff_saves,
 };
 pub use gui::run_gui;
-pub use save::{LoadedSave, SaveFormat};
+pub use save::{GroupCategory, LoadedSave, SaveFormat};
 pub use value::TiValue;
