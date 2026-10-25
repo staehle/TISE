@@ -3309,65 +3309,80 @@ impl TiseApp {
         id_to_display_name: &std::collections::HashMap<i64, String>,
     ) -> bool {
         let mut changed_any = false;
-        for (idx, tech) in techs.iter_mut().enumerate() {
-            let Some(map) = tech.as_object_mut() else {
-                continue;
-            };
-            let name = map
-                .get(statics::TI_FIELD_TECH_TEMPLATE_NAME)
-                .and_then(TiValue::as_str)
-                .unwrap_or(statics::EN_EMPTY)
-                .to_string();
-            ui.group(|ui| {
-                ui.strong(name);
-                if let Some(TiValue::Number(n)) =
-                    map.get_mut(statics::TI_FIELD_ACCUMULATED_RESEARCH)
-                {
-                    ui.horizontal(|ui| {
-                        ui.label(statics::EN_LABEL_ACCUMULATED_RESEARCH);
-                        changed_any |= Self::edit_number(ui, n);
-                    });
-                }
-                ui.label(statics::EN_LABEL_FACTION_CONTRIBUTIONS);
-                let Some(TiValue::Array(rows)) =
-                    map.get_mut(statics::TI_FIELD_FACTION_CONTRIBUTIONS)
-                else {
-                    return;
-                };
-                egui::Grid::new(("tech_progress_grid", idx))
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for row in rows.iter_mut() {
-                            let Some(entry) = row.as_object_mut() else {
-                                continue;
-                            };
-                            let Some(id) = entry
-                                .get(statics::TI_FIELD_KEY_CAP)
-                                .and_then(TiValue::is_relational_ref)
-                            else {
-                                continue;
-                            };
-                            if ui.small_button(statics::EN_BTN_GO).clicked() {
-                                if let Some((ref_group, _)) = id_lookup.get(&id) {
-                                    self.select_object_programmatic(ref_group, id, true, true);
-                                } else {
-                                    self.last_error = Some(format!("Reference ID {id} not found"));
+        egui::ScrollArea::horizontal()
+            .id_salt("tech_progress_scroll")
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    for (idx, tech) in techs.iter_mut().enumerate() {
+                        let Some(map) = tech.as_object_mut() else {
+                            continue;
+                        };
+                        let name = map
+                            .get(statics::TI_FIELD_TECH_TEMPLATE_NAME)
+                            .and_then(TiValue::as_str)
+                            .unwrap_or(statics::EN_EMPTY)
+                            .to_string();
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                ui.strong(name);
+                                if let Some(TiValue::Number(n)) =
+                                    map.get_mut(statics::TI_FIELD_ACCUMULATED_RESEARCH)
+                                {
+                                    ui.horizontal(|ui| {
+                                        ui.label(statics::EN_LABEL_ACCUMULATED_RESEARCH);
+                                        changed_any |= Self::edit_number(ui, n);
+                                    });
                                 }
-                            }
-                            match id_to_display_name.get(&id).filter(|n| !n.is_empty()) {
-                                Some(n) => ui.label(format!("{id}: {n}")),
-                                None => ui.label(format!("{id}")),
-                            };
-                            if let Some(TiValue::Number(n)) =
-                                entry.get_mut(statics::TI_FIELD_VALUE_CAP)
-                            {
-                                changed_any |= Self::edit_number(ui, n);
-                            }
-                            ui.end_row();
-                        }
-                    });
+                                ui.label(statics::EN_LABEL_FACTION_CONTRIBUTIONS);
+                                let Some(TiValue::Array(rows)) =
+                                    map.get_mut(statics::TI_FIELD_FACTION_CONTRIBUTIONS)
+                                else {
+                                    return;
+                                };
+                                egui::Grid::new(("tech_progress_grid", idx))
+                                    .striped(true)
+                                    .show(ui, |ui| {
+                                        for row in rows.iter_mut() {
+                                            let Some(entry) = row.as_object_mut() else {
+                                                continue;
+                                            };
+                                            let Some(id) = entry
+                                                .get(statics::TI_FIELD_KEY_CAP)
+                                                .and_then(TiValue::is_relational_ref)
+                                            else {
+                                                continue;
+                                            };
+                                            if ui.small_button(statics::EN_BTN_GO).clicked() {
+                                                if let Some((ref_group, _)) = id_lookup.get(&id) {
+                                                    self.select_object_programmatic(
+                                                        ref_group, id, true, true,
+                                                    );
+                                                } else {
+                                                    self.last_error = Some(format!(
+                                                        "Reference ID {id} not found"
+                                                    ));
+                                                }
+                                            }
+                                            match id_to_display_name
+                                                .get(&id)
+                                                .filter(|n| !n.is_empty())
+                                            {
+                                                Some(n) => ui.label(format!("{id}: {n}")),
+                                                None => ui.label(format!("{id}")),
+                                            };
+                                            if let Some(TiValue::Number(n)) =
+                                                entry.get_mut(statics::TI_FIELD_VALUE_CAP)
+                                            {
+                                                changed_any |= Self::edit_number(ui, n);
+                                            }
+                                            ui.end_row();
+                                        }
+                                    });
+                            });
+                        });
+                    }
+                });
             });
-        }
         changed_any
     }
 
