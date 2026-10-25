@@ -1,9 +1,13 @@
 use crate::diff::{self, IgnoreRules, SaveDiff};
 use crate::statics;
-use crate::{LoadedSave, TiValue};
+use crate::{GroupCategory, LoadedSave, TiValue};
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
-use std::{collections::BTreeSet, path::PathBuf, sync::OnceLock};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::OnceLock,
+};
 
 #[derive(Clone, Debug)]
 enum PublicOpinionDrag {
@@ -28,11 +32,13 @@ pub fn run_gui() -> eframe::Result {
         &title,
         options,
         Box::new(|_cc| {
-            Ok(Box::new(TiseApp {
+            let mut app = TiseApp {
                 theme_dark: true,
                 update_check: Some(crate::update::UpdateCheck::spawn()),
                 ..Default::default()
-            }))
+            };
+            app.init_game_data(crate::gamedata::Config::load());
+            Ok(Box::new(app))
         }),
     )
 }
@@ -149,6 +155,16 @@ struct TiseApp {
     /// Set once the user dismisses the update banner, so it stays hidden for
     /// the rest of the session.
     update_dismissed: bool,
+
+    /// Persisted settings (remembered game folder).
+    app_config: crate::gamedata::Config,
+    /// Background/finished load of base-game template names.
+    game_data: Option<crate::gamedata::GameDataLoad>,
+    game_dir_dialog_open: bool,
+    game_dir_input: String,
+    game_dir_error: Option<String>,
+    /// Search text for the councillor trait picker.
+    trait_add_filter: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -3172,7 +3188,34 @@ impl TiseApp {
                                     ui.separator();
                                 }
 
-                                if let TiValue::Array(arr) = &mut staged
+                                let trait_helper = prop == statics::TI_PROP_TRAIT_TEMPLATE_NAMES
+                                    && matches!(&staged, TiValue::Array(a)
+                                        if a.iter().all(|v| matches!(v, TiValue::String(_))));
+                                if trait_helper && let TiValue::Array(arr) = &mut staged {
+                                    let game_data = self.game_data_snapshot();
+                                    let catalog = game_data
+                                        .as_deref()
+                                        .map(|g| g.names(crate::gamedata::TEMPLATE_TRAITS))
+                                        .filter(|c| !c.is_empty());
+                                    let mut changed = false;
+                                    ui.group(|ui| {
+                                        ui.label(statics::EN_TRAIT_EDITOR);
+                                        changed = Self::render_trait_editor(
+                                            ui,
+                                            arr,
+                                            catalog,
+                                            &mut self.trait_add_filter,
+                                        );
+                                    });
+                                    if changed {
+                                        self.edit_buffer = staged.to_ti_save_pretty();
+                                        self.last_error = None;
+                                    }
+                                    ui.separator();
+                                }
+
+                                if !trait_helper
+                                    && let TiValue::Array(arr) = &mut staged
                                     && Self::is_simple_list(arr)
                                 {
                                     let mut changed = false;
@@ -3630,6 +3673,274 @@ impl TiseApp {
     }
 }
 
+impl TiseApp {
+    /// Apply the loaded config at startup: start loading game data if the saved
+    /// folder is still valid, otherwise show the first-run prompt (once).
+    fn init_game_data(&mut self, config: crate::gamedata::Config) {
+        self.app_config = config;
+        let paths = self
+            .app_config
+            .game_dir
+            .as_deref()
+            .and_then(crate::gamedata::resolve_game_paths);
+        if let Some(paths) = paths {
+            self.game_data = Some(crate::gamedata::GameDataLoad::spawn(paths));
+        } else if !self.app_config.prompt_dismissed {
+            self.open_game_dir_dialog();
+        }
+    }
+
+    fn open_game_dir_dialog(&mut self) {
+        self.game_dir_input = self
+            .app_config
+            .game_dir
+            .clone()
+            .or_else(crate::gamedata::detect_game_dir)
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        self.game_dir_error = None;
+        self.game_dir_dialog_open = true;
+    }
+
+    fn persist_config(&mut self) {
+        if let Err(e) = self.app_config.save() {
+            self.last_error = Some(format!("Could not save settings: {e}"));
+        }
+    }
+
+    /// Validate and adopt the folder typed/picked in the dialog.
+    fn apply_game_dir(&mut self) {
+        let chosen = PathBuf::from(self.game_dir_input.trim());
+        match crate::gamedata::resolve_game_paths(&chosen) {
+            Some(paths) => {
+                self.app_config.game_dir = Some(chosen);
+                self.app_config.prompt_dismissed = false;
+                self.persist_config();
+                self.game_data = Some(crate::gamedata::GameDataLoad::spawn(paths));
+                self.game_dir_dialog_open = false;
+                self.game_dir_error = None;
+            }
+            None => self.game_dir_error = Some(statics::EN_GAME_FOLDER_INVALID.to_string()),
+        }
+    }
+
+    /// Loaded game data, if the background load has finished.
+    fn game_data_snapshot(&mut self) -> Option<std::sync::Arc<crate::gamedata::GameData>> {
+        self.game_data.as_mut().and_then(|g| g.poll())
+    }
+
+    fn show_game_dir_dialog(&mut self, ctx: &egui::Context) {
+        if !self.game_dir_dialog_open {
+            return;
+        }
+        let loaded = self.game_data_snapshot().is_some();
+        let mut open = true;
+        let mut apply = false;
+        let mut close = false;
+        let mut skip = false;
+        let mut clear = false;
+        egui::Window::new(statics::EN_WINDOW_GAME_FOLDER)
+            .collapsible(false)
+            .open(&mut open)
+            .default_width(560.0)
+            .show(ctx, |ui| {
+                ui.label(statics::EN_GAME_FOLDER_INTRO);
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.game_dir_input)
+                            .hint_text(statics::EN_GAME_FOLDER_HINT)
+                            .desired_width(ui.available_width() - 90.0),
+                    );
+                    if ui.button(statics::EN_GAME_FOLDER_BROWSE).clicked()
+                        && let Some(dir) = rfd::FileDialog::new().pick_folder()
+                    {
+                        self.game_dir_input = dir.display().to_string();
+                        self.game_dir_error = None;
+                    }
+                });
+                if let Some(err) = &self.game_dir_error {
+                    ui.colored_label(egui::Color32::RED, err);
+                }
+                if let Some(dir) = &self.app_config.game_dir {
+                    if loaded {
+                        ui.label(format!(
+                            "{} {}",
+                            statics::EN_GAME_FOLDER_LOADED,
+                            dir.display()
+                        ));
+                    } else {
+                        ui.label(statics::EN_GAME_FOLDER_LOADING);
+                    }
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if ui.button(statics::EN_GAME_FOLDER_USE).clicked() {
+                        apply = true;
+                    }
+                    if ui.button(statics::EN_GAME_FOLDER_DETECT).clicked() {
+                        match crate::gamedata::detect_game_dir() {
+                            Some(p) => {
+                                self.game_dir_input = p.display().to_string();
+                                self.game_dir_error = None;
+                            }
+                            None => {
+                                self.game_dir_error =
+                                    Some(statics::EN_GAME_FOLDER_DETECT_FAILED.to_string());
+                            }
+                        }
+                    }
+                    if self.app_config.game_dir.is_some() {
+                        if ui.button(statics::EN_GAME_FOLDER_CLEAR).clicked() {
+                            clear = true;
+                        }
+                        if ui.button(statics::EN_GAME_FOLDER_CANCEL).clicked() {
+                            close = true;
+                        }
+                    } else if ui.button(statics::EN_GAME_FOLDER_SKIP).clicked() {
+                        skip = true;
+                    }
+                });
+            });
+        if apply {
+            self.apply_game_dir();
+        }
+        if clear {
+            self.app_config.game_dir = None;
+            self.app_config.prompt_dismissed = true;
+            self.persist_config();
+            self.game_data = None;
+            close = true;
+        }
+        if skip {
+            self.app_config.prompt_dismissed = true;
+            self.persist_config();
+            close = true;
+        }
+        if close || !open {
+            self.game_dir_dialog_open = false;
+        }
+    }
+
+    /// Chip-style editor for `traitTemplateNames`: click a trait to remove it,
+    /// search the game's trait list to add one. `catalog` is `None` when no game
+    /// folder is configured; free-text add still works then. Returns true if
+    /// `arr` changed.
+    fn render_trait_editor(
+        ui: &mut egui::Ui,
+        arr: &mut Vec<TiValue>,
+        catalog: Option<&[String]>,
+        filter: &mut String,
+    ) -> bool {
+        let mut changed = false;
+        let current: Vec<String> = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect();
+
+        const PANE_HEIGHT: f32 = 200.0;
+        let mut remove: Option<usize> = None;
+        let mut add: Option<String> = None;
+
+        // Two side-by-side panes: what the councillor has, and what can be added.
+        ui.columns(2, |cols| {
+            cols[0].group(|ui| {
+                ui.strong(format!("{} ({})", statics::EN_TRAIT_CURRENT, current.len()));
+                ui.weak(statics::EN_TRAIT_EDITOR_REMOVE_HINT);
+                ui.separator();
+                egui::ScrollArea::vertical()
+                    .id_salt("trait_current")
+                    .min_scrolled_height(PANE_HEIGHT)
+                    .max_height(PANE_HEIGHT)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            for (i, name) in current.iter().enumerate() {
+                                let duplicate = current[..i].contains(name);
+                                let unknown = catalog.is_some_and(|c| !c.contains(name));
+                                let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
+                                let mut tip = None;
+                                if duplicate {
+                                    text = text.color(egui::Color32::LIGHT_RED);
+                                    tip = Some(statics::EN_TRAIT_DUPLICATE);
+                                } else if unknown {
+                                    text = text.color(egui::Color32::ORANGE);
+                                    tip = Some(statics::EN_TRAIT_UNKNOWN);
+                                }
+                                let mut resp = ui.button(text);
+                                if let Some(tip) = tip {
+                                    resp = resp.on_hover_text(tip);
+                                }
+                                if resp.clicked() {
+                                    remove = Some(i);
+                                }
+                            }
+                        });
+                    });
+            });
+
+            cols[1].group(|ui| {
+                ui.strong(statics::EN_TRAIT_ADD);
+                ui.add(
+                    egui::TextEdit::singleline(filter)
+                        .hint_text(statics::EN_TRAIT_SEARCH_HINT)
+                        .desired_width(f32::INFINITY),
+                );
+                ui.separator();
+
+                let needle = filter.trim().to_lowercase();
+                if let Some(catalog) = catalog {
+                    egui::ScrollArea::vertical()
+                        .id_salt("trait_picker")
+                        .min_scrolled_height(PANE_HEIGHT - 28.0)
+                        .max_height(PANE_HEIGHT - 28.0)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for name in catalog
+                                .iter()
+                                .filter(|n| !current.contains(n))
+                                .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
+                            {
+                                let row = egui::Button::new(format!("+  {name}"))
+                                    .frame(false)
+                                    .min_size(egui::vec2(ui.available_width(), 0.0));
+                                if ui.add(row).clicked() {
+                                    add = Some(name.clone());
+                                }
+                            }
+                        });
+                } else {
+                    ui.weak(statics::EN_TRAIT_NO_GAME_DATA);
+                }
+
+                let typed = filter.trim();
+                let offer_typed = !typed.is_empty()
+                    && !current.iter().any(|n| n == typed)
+                    && !catalog.is_some_and(|c| c.iter().any(|n| n == typed));
+                if offer_typed
+                    && ui
+                        .button(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed))
+                        .clicked()
+                {
+                    add = Some(typed.to_string());
+                }
+            });
+        });
+
+        if let Some(i) = remove {
+            arr.remove(i);
+            changed = true;
+        }
+
+        if let Some(name) = add {
+            arr.push(TiValue::String(name));
+            filter.clear();
+            changed = true;
+        }
+        changed
+    }
+}
+
 impl eframe::App for TiseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Undo/Redo shortcuts.
@@ -3696,6 +4007,10 @@ impl eframe::App for TiseApp {
                     .clicked()
                 {
                     self.compare_against();
+                }
+
+                if ui.button(statics::EN_BTN_GAME_FOLDER).clicked() {
+                    self.open_game_dir_dialog();
                 }
 
                 if ui.button(statics::EN_BTN_ABOUT).clicked() {
@@ -3785,6 +4100,7 @@ impl eframe::App for TiseApp {
         });
 
         self.show_update_banner(ctx);
+        self.show_game_dir_dialog(ctx);
 
         if self.changes_open {
             let mut open = self.changes_open;
@@ -4443,34 +4759,63 @@ impl eframe::App for TiseApp {
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
+                            let mut by_category: BTreeMap<GroupCategory, Vec<&String>> =
+                                BTreeMap::new();
                             for group in &groups {
-                                let label = LoadedSave::group_display_name(group);
-                                let selected =
-                                    self.selected_group.as_deref() == Some(group.as_str());
-                                let resp = Self::selectable_row_left(ui, selected, label, row_h);
-                                if selected && self.scroll_groups_to_selected {
-                                    let align = if self.scroll_align_center {
-                                        egui::Align::Center
-                                    } else {
-                                        egui::Align::Min
-                                    };
-                                    resp.scroll_to_me(Some(align));
-                                    self.scroll_groups_to_selected = false;
-                                    self.scroll_align_center = false;
-                                }
-                                if resp.clicked() {
-                                    self.selected_group = Some(group.clone());
-                                    self.selected_object_id = None;
-                                    self.selected_property = None;
-                                    self.edit_buffer.clear();
-                                    self.raw_edit_mode = false;
-                                    self.scroll_groups_to_selected = false;
-                                    self.scroll_objects_to_selected = false;
-                                    self.scroll_properties_to_selected = false;
-                                    if group != statics::TI_GROUP_ORG_STATE {
-                                        self.org_bulk_selected_ids.clear();
+                                by_category
+                                    .entry(LoadedSave::group_category(group))
+                                    .or_default()
+                                    .push(group);
+                            }
+                            let selected_category = self
+                                .selected_group
+                                .as_deref()
+                                .map(LoadedSave::group_category);
+                            for (category, cat_groups) in by_category {
+                                // Expand the selected group's category so it can be scrolled to.
+                                let force_open = (self.scroll_groups_to_selected
+                                    && selected_category == Some(category))
+                                .then_some(true);
+                                egui::CollapsingHeader::new(format!(
+                                    "{} ({})",
+                                    category.label(),
+                                    cat_groups.len()
+                                ))
+                                .id_salt(("group_category", category))
+                                .default_open(true)
+                                .open(force_open)
+                                .show(ui, |ui| {
+                                    for group in cat_groups {
+                                        let label = LoadedSave::group_display_name(group);
+                                        let selected =
+                                            self.selected_group.as_deref() == Some(group.as_str());
+                                        let resp =
+                                            Self::selectable_row_left(ui, selected, label, row_h);
+                                        if selected && self.scroll_groups_to_selected {
+                                            let align = if self.scroll_align_center {
+                                                egui::Align::Center
+                                            } else {
+                                                egui::Align::Min
+                                            };
+                                            resp.scroll_to_me(Some(align));
+                                            self.scroll_groups_to_selected = false;
+                                            self.scroll_align_center = false;
+                                        }
+                                        if resp.clicked() {
+                                            self.selected_group = Some(group.clone());
+                                            self.selected_object_id = None;
+                                            self.selected_property = None;
+                                            self.edit_buffer.clear();
+                                            self.raw_edit_mode = false;
+                                            self.scroll_groups_to_selected = false;
+                                            self.scroll_objects_to_selected = false;
+                                            self.scroll_properties_to_selected = false;
+                                            if group != statics::TI_GROUP_ORG_STATE {
+                                                self.org_bulk_selected_ids.clear();
+                                            }
+                                        }
                                     }
-                                }
+                                });
                             }
                         });
                 });
@@ -4478,270 +4823,304 @@ impl eframe::App for TiseApp {
 
         let mut org_add_faction_request: Option<i64> = None;
 
-        egui::SidePanel::left("objects_panel")
-            .resizable(true)
-            .default_width(360.0)
-            .show(ctx, |ui| {
-                ui.heading(statics::EN_HEADING_OBJECTS);
-                ui.separator();
+        // Singleton groups (e.g. TIGlobalResearchState) have nothing to pick from, so
+        // select their only object and skip the objects pane.
+        let singleton_object = self.selected_group.as_ref().and_then(|g| {
+            match objects_by_group.get(g).map(Vec::as_slice) {
+                Some([only]) => Some((g.clone(), only.id)),
+                _ => None,
+            }
+        });
+        if let Some((group, id)) = &singleton_object
+            && self.selected_object_id != Some(*id)
+        {
+            self.select_object_internal(group, *id, false, false, false);
+        }
 
-                ui.horizontal(|ui| {
-                    ui.label(statics::EN_LABEL_SORT);
-                    ui.selectable_value(&mut self.sort_objects_by_id, false, statics::EN_SORT_NAME);
-                    ui.selectable_value(&mut self.sort_objects_by_id, true, statics::EN_SORT_ID);
-                });
-                ui.separator();
-
-                let Some(group) = self.selected_group.clone() else {
-                    ui.label(statics::EN_SELECT_GROUP);
-                    return;
-                };
-
-                if group == statics::TI_GROUP_HAB_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
-                        .map(|v| v.iter().collect())
-                        .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.hab_faction_filter,
-                        id_to_display_name,
-                        "hab_faction_filter",
-                    );
-                    ui.separator();
-                }
-
-                if group == statics::TI_GROUP_COUNCILOR_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
-                        .map(|v| v.iter().collect())
-                        .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.councilor_faction_filter,
-                        id_to_display_name,
-                        "councilor_faction_filter",
-                    );
-                    ui.separator();
-                }
-
-                if group == statics::TI_GROUP_ORG_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
-                        .map(|v| v.iter().collect())
-                        .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_org_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.org_faction_filter,
-                        id_to_display_name,
-                        "org_faction_filter",
-                    );
-                    Self::render_tier_filter_combobox(
-                        ui,
-                        &mut self.org_tier_filter,
-                        &[1, 2, 3, 4, 5],
-                        "org_tier_filter",
-                    );
+        if singleton_object.is_none() {
+            egui::SidePanel::left("objects_panel")
+                .resizable(true)
+                .default_width(360.0)
+                .show(ctx, |ui| {
+                    ui.heading(statics::EN_HEADING_OBJECTS);
                     ui.separator();
 
                     ui.horizontal(|ui| {
-                        ui.label(statics::EN_LABEL_ADD_TO_FACTION);
-                        let selected_label = self
-                            .org_add_faction_target
-                            .and_then(|id| id_to_display_name.get(&id))
-                            .cloned()
-                            .unwrap_or_else(|| statics::EN_FILTER_SELECT_FACTION.to_string());
-                        egui::ComboBox::from_id_salt("org_add_faction_target")
-                            .selected_text(selected_label)
-                            .show_ui(ui, |ui| {
-                                for faction in &factions {
+                        ui.label(statics::EN_LABEL_SORT);
+                        ui.selectable_value(
+                            &mut self.sort_objects_by_id,
+                            false,
+                            statics::EN_SORT_NAME,
+                        );
+                        ui.selectable_value(
+                            &mut self.sort_objects_by_id,
+                            true,
+                            statics::EN_SORT_ID,
+                        );
+                    });
+                    ui.separator();
+
+                    let Some(group) = self.selected_group.clone() else {
+                        ui.label(statics::EN_SELECT_GROUP);
+                        return;
+                    };
+
+                    if group == statics::TI_GROUP_HAB_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.hab_faction_filter,
+                            id_to_display_name,
+                            "hab_faction_filter",
+                        );
+                        ui.separator();
+                    }
+
+                    if group == statics::TI_GROUP_COUNCILOR_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.councilor_faction_filter,
+                            id_to_display_name,
+                            "councilor_faction_filter",
+                        );
+                        ui.separator();
+                    }
+
+                    if group == statics::TI_GROUP_ORG_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_org_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.org_faction_filter,
+                            id_to_display_name,
+                            "org_faction_filter",
+                        );
+                        Self::render_tier_filter_combobox(
+                            ui,
+                            &mut self.org_tier_filter,
+                            &[1, 2, 3, 4, 5],
+                            "org_tier_filter",
+                        );
+                        ui.separator();
+
+                        ui.horizontal(|ui| {
+                            ui.label(statics::EN_LABEL_ADD_TO_FACTION);
+                            let selected_label = self
+                                .org_add_faction_target
+                                .and_then(|id| id_to_display_name.get(&id))
+                                .cloned()
+                                .unwrap_or_else(|| statics::EN_FILTER_SELECT_FACTION.to_string());
+                            egui::ComboBox::from_id_salt("org_add_faction_target")
+                                .selected_text(selected_label)
+                                .show_ui(ui, |ui| {
+                                    for faction in &factions {
+                                        ui.selectable_value(
+                                            &mut self.org_add_faction_target,
+                                            Some(faction.id),
+                                            &faction.display_name,
+                                        );
+                                    }
+                                });
+                        });
+
+                        let selected_count = self.org_bulk_selected_ids.len();
+                        ui.label(format!(
+                            "{selected_count} {}",
+                            statics::EN_LABEL_ORGS_SELECTED
+                        ));
+
+                        let can_add = selected_count > 0 && self.org_add_faction_target.is_some();
+                        if ui
+                            .add_enabled(can_add, egui::Button::new(statics::EN_BTN_ADD_TO_FACTION))
+                            .clicked()
+                            && let Some(faction_id) = self.org_add_faction_target
+                        {
+                            org_add_faction_request = Some(faction_id);
+                        }
+                        ui.separator();
+                    }
+
+                    if group == statics::TI_GROUP_HAB_MODULE_STATE {
+                        let mut factions: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_FACTION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        factions.sort_by_key(|f| f.display_name.to_lowercase());
+                        Self::render_faction_filter_combobox(
+                            ui,
+                            &factions,
+                            &mut self.hab_module_faction_filter,
+                            id_to_display_name,
+                            "hab_module_faction_filter",
+                        );
+                        ui.horizontal(|ui| {
+                            ui.label(statics::EN_LABEL_FILTER_CONSTRUCTION);
+                            egui::ComboBox::from_id_salt("hab_module_construction_filter")
+                                .selected_text(match self.hab_module_construction_filter {
+                                    HabModuleConstructionFilter::All => {
+                                        statics::EN_FILTER_CONSTRUCTION_ALL
+                                    }
+                                    HabModuleConstructionFilter::Completed => {
+                                        statics::EN_FILTER_CONSTRUCTION_COMPLETED
+                                    }
+                                    HabModuleConstructionFilter::InProgress => {
+                                        statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS
+                                    }
+                                })
+                                .show_ui(ui, |ui| {
                                     ui.selectable_value(
-                                        &mut self.org_add_faction_target,
-                                        Some(faction.id),
-                                        &faction.display_name,
+                                        &mut self.hab_module_construction_filter,
+                                        HabModuleConstructionFilter::All,
+                                        statics::EN_FILTER_CONSTRUCTION_ALL,
                                     );
-                                }
-                            });
-                    });
-
-                    let selected_count = self.org_bulk_selected_ids.len();
-                    ui.label(format!(
-                        "{selected_count} {}",
-                        statics::EN_LABEL_ORGS_SELECTED
-                    ));
-
-                    let can_add = selected_count > 0 && self.org_add_faction_target.is_some();
-                    if ui
-                        .add_enabled(can_add, egui::Button::new(statics::EN_BTN_ADD_TO_FACTION))
-                        .clicked()
-                        && let Some(faction_id) = self.org_add_faction_target
-                    {
-                        org_add_faction_request = Some(faction_id);
+                                    ui.selectable_value(
+                                        &mut self.hab_module_construction_filter,
+                                        HabModuleConstructionFilter::Completed,
+                                        statics::EN_FILTER_CONSTRUCTION_COMPLETED,
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.hab_module_construction_filter,
+                                        HabModuleConstructionFilter::InProgress,
+                                        statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS,
+                                    );
+                                });
+                        });
+                        ui.separator();
                     }
-                    ui.separator();
-                }
 
-                if group == statics::TI_GROUP_HAB_MODULE_STATE {
-                    let mut factions: Vec<_> = objects_by_group
-                        .get(statics::TI_GROUP_FACTION_STATE)
+                    let mut objects: Vec<_> = objects_by_group
+                        .get(&group)
                         .map(|v| v.iter().collect())
                         .unwrap_or_default();
-                    factions.sort_by_key(|f| f.display_name.to_lowercase());
-                    Self::render_faction_filter_combobox(
-                        ui,
-                        &factions,
-                        &mut self.hab_module_faction_filter,
-                        id_to_display_name,
-                        "hab_module_faction_filter",
-                    );
-                    ui.horizontal(|ui| {
-                        ui.label(statics::EN_LABEL_FILTER_CONSTRUCTION);
-                        egui::ComboBox::from_id_salt("hab_module_construction_filter")
-                            .selected_text(match self.hab_module_construction_filter {
-                                HabModuleConstructionFilter::All => {
-                                    statics::EN_FILTER_CONSTRUCTION_ALL
-                                }
-                                HabModuleConstructionFilter::Completed => {
-                                    statics::EN_FILTER_CONSTRUCTION_COMPLETED
-                                }
-                                HabModuleConstructionFilter::InProgress => {
-                                    statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS
-                                }
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.hab_module_construction_filter,
-                                    HabModuleConstructionFilter::All,
-                                    statics::EN_FILTER_CONSTRUCTION_ALL,
-                                );
-                                ui.selectable_value(
-                                    &mut self.hab_module_construction_filter,
-                                    HabModuleConstructionFilter::Completed,
-                                    statics::EN_FILTER_CONSTRUCTION_COMPLETED,
-                                );
-                                ui.selectable_value(
-                                    &mut self.hab_module_construction_filter,
-                                    HabModuleConstructionFilter::InProgress,
-                                    statics::EN_FILTER_CONSTRUCTION_IN_PROGRESS,
-                                );
-                            });
-                    });
-                    ui.separator();
-                }
 
-                let mut objects: Vec<_> = objects_by_group
-                    .get(&group)
-                    .map(|v| v.iter().collect())
-                    .unwrap_or_default();
-
-                if self.sort_objects_by_id {
-                    objects.sort_by_key(|o| o.id);
-                } else {
-                    objects.sort_by_key(|o| o.display_name.to_lowercase());
-                }
-
-                if group == statics::TI_GROUP_HAB_STATE
-                    && let Some(faction_id) = self.hab_faction_filter
-                {
-                    objects.retain(|obj| hab_faction_id(&save, obj.id) == Some(faction_id));
-                }
-
-                if group == statics::TI_GROUP_COUNCILOR_STATE
-                    && let Some(faction_id) = self.councilor_faction_filter
-                {
-                    objects.retain(|obj| councilor_faction_id(&save, obj.id) == Some(faction_id));
-                }
-
-                if group == statics::TI_GROUP_ORG_STATE {
-                    match self.org_faction_filter {
-                        OrgFactionFilter::All => {}
-                        OrgFactionFilter::NoFaction => {
-                            objects.retain(|obj| org_faction_id(&save, obj.id).is_none());
-                        }
-                        OrgFactionFilter::Faction(faction_id) => {
-                            objects.retain(|obj| org_faction_id(&save, obj.id) == Some(faction_id));
-                        }
+                    if self.sort_objects_by_id {
+                        objects.sort_by_key(|o| o.id);
+                    } else {
+                        objects.sort_by_key(|o| o.display_name.to_lowercase());
                     }
-                    if let Some(tier) = self.org_tier_filter {
-                        objects.retain(|obj| org_tier(&save, obj.id) == Some(tier));
-                    }
-                }
 
-                if group == statics::TI_GROUP_HAB_MODULE_STATE {
-                    if let Some(faction_id) = self.hab_module_faction_filter {
+                    if group == statics::TI_GROUP_HAB_STATE
+                        && let Some(faction_id) = self.hab_faction_filter
+                    {
+                        objects.retain(|obj| hab_faction_id(&save, obj.id) == Some(faction_id));
+                    }
+
+                    if group == statics::TI_GROUP_COUNCILOR_STATE
+                        && let Some(faction_id) = self.councilor_faction_filter
+                    {
                         objects
-                            .retain(|obj| hab_module_faction_id(&save, obj.id) == Some(faction_id));
+                            .retain(|obj| councilor_faction_id(&save, obj.id) == Some(faction_id));
                     }
-                    match self.hab_module_construction_filter {
-                        HabModuleConstructionFilter::All => {}
-                        HabModuleConstructionFilter::Completed => {
+
+                    if group == statics::TI_GROUP_ORG_STATE {
+                        match self.org_faction_filter {
+                            OrgFactionFilter::All => {}
+                            OrgFactionFilter::NoFaction => {
+                                objects.retain(|obj| org_faction_id(&save, obj.id).is_none());
+                            }
+                            OrgFactionFilter::Faction(faction_id) => {
+                                objects.retain(|obj| {
+                                    org_faction_id(&save, obj.id) == Some(faction_id)
+                                });
+                            }
+                        }
+                        if let Some(tier) = self.org_tier_filter {
+                            objects.retain(|obj| org_tier(&save, obj.id) == Some(tier));
+                        }
+                    }
+
+                    if group == statics::TI_GROUP_HAB_MODULE_STATE {
+                        if let Some(faction_id) = self.hab_module_faction_filter {
                             objects.retain(|obj| {
-                                hab_module_construction_completed(&save, obj.id) == Some(true)
+                                hab_module_faction_id(&save, obj.id) == Some(faction_id)
                             });
                         }
-                        HabModuleConstructionFilter::InProgress => {
-                            objects.retain(|obj| {
-                                hab_module_construction_completed(&save, obj.id) != Some(true)
-                            });
+                        match self.hab_module_construction_filter {
+                            HabModuleConstructionFilter::All => {}
+                            HabModuleConstructionFilter::Completed => {
+                                objects.retain(|obj| {
+                                    hab_module_construction_completed(&save, obj.id) == Some(true)
+                                });
+                            }
+                            HabModuleConstructionFilter::InProgress => {
+                                objects.retain(|obj| {
+                                    hab_module_construction_completed(&save, obj.id) != Some(true)
+                                });
+                            }
                         }
                     }
-                }
 
-                let row_h = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
-                ui.push_id("objects_scroll", |ui| {
-                    egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            for obj in objects {
-                                let selected = self.selected_object_id == Some(obj.id);
-                                let text = format!("{}: {}", obj.id, obj.display_name);
-                                let is_org_group = group == statics::TI_GROUP_ORG_STATE;
+                    let row_h = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
+                    ui.push_id("objects_scroll", |ui| {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                for obj in objects {
+                                    let selected = self.selected_object_id == Some(obj.id);
+                                    let text = format!("{}: {}", obj.id, obj.display_name);
+                                    let is_org_group = group == statics::TI_GROUP_ORG_STATE;
 
-                                let resp = if is_org_group {
-                                    let mut checked = self.org_bulk_selected_ids.contains(&obj.id);
-                                    ui.horizontal(|ui| {
-                                        if ui.checkbox(&mut checked, "").changed() {
-                                            if checked {
-                                                self.org_bulk_selected_ids.insert(obj.id);
-                                            } else {
-                                                self.org_bulk_selected_ids.remove(&obj.id);
+                                    let resp = if is_org_group {
+                                        let mut checked =
+                                            self.org_bulk_selected_ids.contains(&obj.id);
+                                        ui.horizontal(|ui| {
+                                            if ui.checkbox(&mut checked, "").changed() {
+                                                if checked {
+                                                    self.org_bulk_selected_ids.insert(obj.id);
+                                                } else {
+                                                    self.org_bulk_selected_ids.remove(&obj.id);
+                                                }
                                             }
-                                        }
+                                            Self::selectable_row_left(
+                                                ui,
+                                                selected,
+                                                text.as_str(),
+                                                row_h,
+                                            )
+                                        })
+                                        .inner
+                                    } else {
                                         Self::selectable_row_left(
                                             ui,
                                             selected,
                                             text.as_str(),
                                             row_h,
                                         )
-                                    })
-                                    .inner
-                                } else {
-                                    Self::selectable_row_left(ui, selected, text.as_str(), row_h)
-                                };
-
-                                if selected && self.scroll_objects_to_selected {
-                                    let align = if self.scroll_align_center {
-                                        egui::Align::Center
-                                    } else {
-                                        egui::Align::Min
                                     };
-                                    resp.scroll_to_me(Some(align));
-                                    self.scroll_objects_to_selected = false;
-                                    self.scroll_align_center = false;
+
+                                    if selected && self.scroll_objects_to_selected {
+                                        let align = if self.scroll_align_center {
+                                            egui::Align::Center
+                                        } else {
+                                            egui::Align::Min
+                                        };
+                                        resp.scroll_to_me(Some(align));
+                                        self.scroll_objects_to_selected = false;
+                                        self.scroll_align_center = false;
+                                    }
+                                    if resp.clicked() {
+                                        self.select_object_user(&group, obj.id);
+                                    }
                                 }
-                                if resp.clicked() {
-                                    self.select_object_user(&group, obj.id);
-                                }
-                            }
-                        });
+                            });
+                    });
                 });
-            });
+        }
 
         if let Some(faction_id) = org_add_faction_request {
             self.add_selected_orgs_to_faction(&mut save, faction_id);
