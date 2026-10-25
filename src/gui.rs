@@ -3153,6 +3153,26 @@ impl TiseApp {
                                 }
 
                                 if let TiValue::Array(arr) = &mut staged
+                                    && is_tech_progress(arr)
+                                {
+                                    let mut changed = false;
+                                    ui.group(|ui| {
+                                        ui.label(statics::EN_TECH_PROGRESS_EDITOR);
+                                        changed = self.render_tech_progress_editor(
+                                            ui,
+                                            arr,
+                                            &save.index.id_lookup,
+                                            &save.index.id_to_display_name,
+                                        );
+                                    });
+                                    if changed {
+                                        self.edit_buffer = staged.to_ti_save_pretty();
+                                        self.last_error = None;
+                                    }
+                                    ui.separator();
+                                }
+
+                                if let TiValue::Array(arr) = &mut staged
                                     && Self::is_simple_list(arr)
                                 {
                                     let mut changed = false;
@@ -3220,6 +3240,92 @@ impl TiseApp {
                     }
                 });
         });
+    }
+
+    fn edit_number(ui: &mut egui::Ui, n: &mut crate::value::TiNumber) -> bool {
+        match n {
+            crate::value::TiNumber::I64(x) => ui.add(egui::DragValue::new(x).speed(1)).changed(),
+            crate::value::TiNumber::U64(x) => ui.add(egui::DragValue::new(x).speed(1)).changed(),
+            crate::value::TiNumber::F64(x) => ui
+                .add(
+                    egui::DragValue::new(x)
+                        .speed(0.1)
+                        .range(f64::NEG_INFINITY..=f64::INFINITY),
+                )
+                .changed(),
+        }
+    }
+
+    /// One card per tech: editable accumulated research, then an editable
+    /// contribution per faction. Entries must satisfy `is_tech_progress`.
+    fn render_tech_progress_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        techs: &mut [TiValue],
+        id_lookup: &std::collections::HashMap<i64, (String, usize)>,
+        id_to_display_name: &std::collections::HashMap<i64, String>,
+    ) -> bool {
+        let mut changed_any = false;
+        for (idx, tech) in techs.iter_mut().enumerate() {
+            let Some(map) = tech.as_object_mut() else {
+                continue;
+            };
+            let name = map
+                .get(statics::TI_FIELD_TECH_TEMPLATE_NAME)
+                .and_then(TiValue::as_str)
+                .unwrap_or(statics::EN_EMPTY)
+                .to_string();
+            ui.group(|ui| {
+                ui.strong(name);
+                if let Some(TiValue::Number(n)) =
+                    map.get_mut(statics::TI_FIELD_ACCUMULATED_RESEARCH)
+                {
+                    ui.horizontal(|ui| {
+                        ui.label(statics::EN_LABEL_ACCUMULATED_RESEARCH);
+                        changed_any |= Self::edit_number(ui, n);
+                    });
+                }
+                ui.label(statics::EN_LABEL_FACTION_CONTRIBUTIONS);
+                let Some(TiValue::Array(rows)) =
+                    map.get_mut(statics::TI_FIELD_FACTION_CONTRIBUTIONS)
+                else {
+                    return;
+                };
+                egui::Grid::new(("tech_progress_grid", idx))
+                    .striped(true)
+                    .show(ui, |ui| {
+                        for row in rows.iter_mut() {
+                            let Some(entry) = row.as_object_mut() else {
+                                continue;
+                            };
+                            let Some(id) = entry
+                                .get(statics::TI_FIELD_KEY_CAP)
+                                .and_then(TiValue::is_relational_ref)
+                            else {
+                                continue;
+                            };
+                            if ui.small_button(statics::EN_BTN_GO).clicked() {
+                                if let Some((ref_group, _)) = id_lookup.get(&id) {
+                                    self.select_object_programmatic(ref_group, id, true, true);
+                                } else {
+                                    self.last_error = Some(format!("Reference ID {id} not found"));
+                                }
+                            }
+                            match id_to_display_name.get(&id).filter(|n| !n.is_empty()) {
+                                Some(n) => ui.label(format!("{id}: {n}")),
+                                None => ui.label(format!("{id}")),
+                            };
+                            if let Some(TiValue::Number(n)) =
+                                entry.get_mut(statics::TI_FIELD_VALUE_CAP)
+                            {
+                                changed_any |= Self::edit_number(ui, n);
+                            }
+                            ui.end_row();
+                        }
+                    });
+            });
+        }
+        changed_any
     }
 
     fn render_ref_list_table(
@@ -3436,6 +3542,34 @@ fn array_of_relational_refs(val: &TiValue) -> Option<Vec<i64>> {
         out.push(item.is_relational_ref()?);
     }
     Some(out)
+}
+
+/// Matches the `techProgress` shape: a non-empty array of objects with a tech
+/// name, a numeric accumulated total and `{Key: ref, Value: number}` contributions.
+fn is_tech_progress(items: &[TiValue]) -> bool {
+    !items.is_empty()
+        && items.iter().all(|item| {
+            item.get(statics::TI_FIELD_TECH_TEMPLATE_NAME)
+                .is_some_and(|v| v.as_str().is_some())
+                && matches!(
+                    item.get(statics::TI_FIELD_ACCUMULATED_RESEARCH),
+                    Some(TiValue::Number(_))
+                )
+                && item
+                    .get(statics::TI_FIELD_FACTION_CONTRIBUTIONS)
+                    .and_then(TiValue::as_array)
+                    .is_some_and(|rows| {
+                        rows.iter().all(|r| {
+                            r.get(statics::TI_FIELD_KEY_CAP)
+                                .and_then(TiValue::is_relational_ref)
+                                .is_some()
+                                && matches!(
+                                    r.get(statics::TI_FIELD_VALUE_CAP),
+                                    Some(TiValue::Number(_))
+                                )
+                        })
+                    })
+        })
 }
 
 fn array_of_key_value_refs(val: &TiValue) -> Option<Vec<(i64, String)>> {
@@ -4885,6 +5019,24 @@ mod tests {
         let save =
             make_construction_save(10, Some(TiValue::Number(crate::value::TiNumber::I64(1))));
         assert_eq!(hab_module_construction_completed(&save, 10), None);
+    }
+
+    #[test]
+    fn is_tech_progress_matches_tech_entries_only() {
+        let good = TiValue::parse_json5(
+            r#"[{"techTemplateName":"Skywatch","accumulatedResearch":9.6,
+            "factionContributions":[{"Key":{"value":4859},"Value":4.18}],"selector":null}]"#,
+        )
+        .unwrap();
+        assert!(super::is_tech_progress(good.as_array().unwrap()));
+
+        let bad_value = TiValue::parse_json5(
+            r#"[{"techTemplateName":"Skywatch","accumulatedResearch":9.6,
+            "factionContributions":[{"Key":{"value":4859},"Value":"x"}]}]"#,
+        )
+        .unwrap();
+        assert!(!super::is_tech_progress(bad_value.as_array().unwrap()));
+        assert!(!super::is_tech_progress(&[]));
     }
 
     #[test]

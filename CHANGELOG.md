@@ -1,3 +1,6 @@
+# Unreleased
+- Tech progress editor for `techProgress`: edit each tech's accumulated research and per-faction contributions, with faction names resolved
+
 # 2.2.0
 - In the Organizations group, new "Add to Faction" feature! Thanks @lin0287 for the contribution -- pull #24
 - In-app update checker confirmed working!
