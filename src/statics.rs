@@ -253,6 +253,16 @@ pub const TI_PROP_AVAILABLE_ORGS: &str = "availableOrgs";
 // Hab module property for construction state.
 pub const TI_PROP_CONSTRUCTION_COMPLETED: &str = "constructionCompleted";
 
+// Tech progress entries (TIGlobalResearchState.techProgress).
+pub const TI_FIELD_TECH_TEMPLATE_NAME: &str = "techTemplateName";
+pub const TI_FIELD_ACCUMULATED_RESEARCH: &str = "accumulatedResearch";
+pub const TI_FIELD_FACTION_CONTRIBUTIONS: &str = "factionContributions";
+
+// Tech progress editor UI strings.
+pub const EN_TECH_PROGRESS_EDITOR: &str = "Tech progress editor";
+pub const EN_LABEL_ACCUMULATED_RESEARCH: &str = "Accumulated research:";
+pub const EN_LABEL_FACTION_CONTRIBUTIONS: &str = "Faction contributions";
+
 // Faction filter UI strings.
 pub const EN_LABEL_FILTER_FACTION: &str = "Faction:";
 pub const EN_FILTER_ALL_FACTIONS: &str = "All Factions";
