@@ -3,6 +3,7 @@
 //! round-trip guarantees and efficient indexing.
 
 pub mod diff;
+mod gamedata;
 mod gui;
 mod save;
 pub mod statics;

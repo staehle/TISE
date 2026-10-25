@@ -10,6 +10,7 @@ pub const EN_APP_TITLE: &str = "TISE: Terra Invicta Save Editor";
 pub const EN_BTN_OPEN: &str = "Open...";
 pub const EN_BTN_SAVE_AS: &str = "Save As...";
 pub const EN_BTN_ABOUT: &str = "About";
+pub const EN_BTN_GAME_FOLDER: &str = "Game Folder...";
 pub const EN_BTN_TOGGLE_THEME: &str = "Theme";
 
 pub const EN_NAV_BACK: &str = "<- Back";
@@ -201,6 +202,7 @@ pub const TI_REF_FIELD_TYPE: &str = "$type";
 
 // Common object properties.
 pub const TI_PROP_PUBLIC_OPINION: &str = "publicOpinion";
+pub const TI_PROP_TRAIT_TEMPLATE_NAMES: &str = "traitTemplateNames";
 pub const TI_PUBLIC_OPINION_UNDECIDED: &str = "Undecided";
 
 // Common public-opinion outcomes (color-coded in the editor).
@@ -263,3 +265,30 @@ pub const EN_LABEL_ADD_TO_FACTION: &str = "Add to Faction:";
 pub const EN_FILTER_SELECT_FACTION: &str = "Select Faction...";
 pub const EN_BTN_ADD_TO_FACTION: &str = "Add Selected to Faction";
 pub const EN_LABEL_ORGS_SELECTED: &str = "selected";
+
+// Game folder (base-game data lookup).
+pub const EN_WINDOW_GAME_FOLDER: &str = "Terra Invicta Game Folder";
+pub const EN_GAME_FOLDER_INTRO: &str = "Select your Terra Invicta install folder so TISE can look up valid template names (traits, etc.) from the base game and enabled mods. This is remembered for next time and is optional.";
+pub const EN_GAME_FOLDER_HINT: &str =
+    r"e.g. C:\Program Files (x86)\Steam\steamapps\common\Terra Invicta";
+pub const EN_GAME_FOLDER_BROWSE: &str = "Browse...";
+pub const EN_GAME_FOLDER_DETECT: &str = "Auto-detect";
+pub const EN_GAME_FOLDER_USE: &str = "Use this folder";
+pub const EN_GAME_FOLDER_SKIP: &str = "Skip";
+pub const EN_GAME_FOLDER_CLEAR: &str = "Clear";
+pub const EN_GAME_FOLDER_CANCEL: &str = "Cancel";
+pub const EN_GAME_FOLDER_DETECT_FAILED: &str =
+    "Could not find a Terra Invicta install automatically.";
+pub const EN_GAME_FOLDER_INVALID: &str = "That folder doesn't look like a Terra Invicta install (TITraitTemplate.json not found under it).";
+pub const EN_GAME_FOLDER_LOADED: &str = "Game data loaded from:";
+pub const EN_GAME_FOLDER_LOADING: &str = "Loading game data...";
+
+// Councillor traits helper.
+pub const EN_TRAIT_EDITOR: &str = "Councillor traits";
+pub const EN_TRAIT_EDITOR_REMOVE_HINT: &str = "Click a trait to remove it.";
+pub const EN_TRAIT_SEARCH_HINT: &str = "Search traits to add...";
+pub const EN_TRAIT_NO_GAME_DATA: &str =
+    "Set the game folder (\"Game Folder...\" in the top bar) to pick from the full trait list.";
+pub const EN_TRAIT_UNKNOWN: &str = "Not found in game data";
+pub const EN_TRAIT_DUPLICATE: &str = "Duplicate";
+pub const EN_TRAIT_ADD_TYPED: &str = "Add as typed:";

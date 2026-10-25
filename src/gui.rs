@@ -28,11 +28,13 @@ pub fn run_gui() -> eframe::Result {
         &title,
         options,
         Box::new(|_cc| {
-            Ok(Box::new(TiseApp {
+            let mut app = TiseApp {
                 theme_dark: true,
                 update_check: Some(crate::update::UpdateCheck::spawn()),
                 ..Default::default()
-            }))
+            };
+            app.init_game_data(crate::gamedata::Config::load());
+            Ok(Box::new(app))
         }),
     )
 }
@@ -149,6 +151,16 @@ struct TiseApp {
     /// Set once the user dismisses the update banner, so it stays hidden for
     /// the rest of the session.
     update_dismissed: bool,
+
+    /// Persisted settings (remembered game folder).
+    app_config: crate::gamedata::Config,
+    /// Background/finished load of base-game template names.
+    game_data: Option<crate::gamedata::GameDataLoad>,
+    game_dir_dialog_open: bool,
+    game_dir_input: String,
+    game_dir_error: Option<String>,
+    /// Search text for the councillor trait picker.
+    trait_add_filter: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -3152,7 +3164,34 @@ impl TiseApp {
                                     ui.separator();
                                 }
 
-                                if let TiValue::Array(arr) = &mut staged
+                                let trait_helper = prop == statics::TI_PROP_TRAIT_TEMPLATE_NAMES
+                                    && matches!(&staged, TiValue::Array(a)
+                                        if a.iter().all(|v| matches!(v, TiValue::String(_))));
+                                if trait_helper && let TiValue::Array(arr) = &mut staged {
+                                    let game_data = self.game_data_snapshot();
+                                    let catalog = game_data
+                                        .as_deref()
+                                        .map(|g| g.names(crate::gamedata::TEMPLATE_TRAITS))
+                                        .filter(|c| !c.is_empty());
+                                    let mut changed = false;
+                                    ui.group(|ui| {
+                                        ui.label(statics::EN_TRAIT_EDITOR);
+                                        changed = Self::render_trait_editor(
+                                            ui,
+                                            arr,
+                                            catalog,
+                                            &mut self.trait_add_filter,
+                                        );
+                                    });
+                                    if changed {
+                                        self.edit_buffer = staged.to_ti_save_pretty();
+                                        self.last_error = None;
+                                    }
+                                    ui.separator();
+                                }
+
+                                if !trait_helper
+                                    && let TiValue::Array(arr) = &mut staged
                                     && Self::is_simple_list(arr)
                                 {
                                     let mut changed = false;
@@ -3496,6 +3535,251 @@ impl TiseApp {
     }
 }
 
+impl TiseApp {
+    /// Apply the loaded config at startup: start loading game data if the saved
+    /// folder is still valid, otherwise show the first-run prompt (once).
+    fn init_game_data(&mut self, config: crate::gamedata::Config) {
+        self.app_config = config;
+        let paths = self
+            .app_config
+            .game_dir
+            .as_deref()
+            .and_then(crate::gamedata::resolve_game_paths);
+        if let Some(paths) = paths {
+            self.game_data = Some(crate::gamedata::GameDataLoad::spawn(paths));
+        } else if !self.app_config.prompt_dismissed {
+            self.open_game_dir_dialog();
+        }
+    }
+
+    fn open_game_dir_dialog(&mut self) {
+        self.game_dir_input = self
+            .app_config
+            .game_dir
+            .clone()
+            .or_else(crate::gamedata::detect_game_dir)
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        self.game_dir_error = None;
+        self.game_dir_dialog_open = true;
+    }
+
+    fn persist_config(&mut self) {
+        if let Err(e) = self.app_config.save() {
+            self.last_error = Some(format!("Could not save settings: {e}"));
+        }
+    }
+
+    /// Validate and adopt the folder typed/picked in the dialog.
+    fn apply_game_dir(&mut self) {
+        let chosen = PathBuf::from(self.game_dir_input.trim());
+        match crate::gamedata::resolve_game_paths(&chosen) {
+            Some(paths) => {
+                self.app_config.game_dir = Some(chosen);
+                self.app_config.prompt_dismissed = false;
+                self.persist_config();
+                self.game_data = Some(crate::gamedata::GameDataLoad::spawn(paths));
+                self.game_dir_dialog_open = false;
+                self.game_dir_error = None;
+            }
+            None => self.game_dir_error = Some(statics::EN_GAME_FOLDER_INVALID.to_string()),
+        }
+    }
+
+    /// Loaded game data, if the background load has finished.
+    fn game_data_snapshot(&mut self) -> Option<std::sync::Arc<crate::gamedata::GameData>> {
+        self.game_data.as_mut().and_then(|g| g.poll())
+    }
+
+    fn show_game_dir_dialog(&mut self, ctx: &egui::Context) {
+        if !self.game_dir_dialog_open {
+            return;
+        }
+        let loaded = self.game_data_snapshot().is_some();
+        let mut open = true;
+        let mut apply = false;
+        let mut close = false;
+        let mut skip = false;
+        let mut clear = false;
+        egui::Window::new(statics::EN_WINDOW_GAME_FOLDER)
+            .collapsible(false)
+            .open(&mut open)
+            .default_width(560.0)
+            .show(ctx, |ui| {
+                ui.label(statics::EN_GAME_FOLDER_INTRO);
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.game_dir_input)
+                            .hint_text(statics::EN_GAME_FOLDER_HINT)
+                            .desired_width(ui.available_width() - 90.0),
+                    );
+                    if ui.button(statics::EN_GAME_FOLDER_BROWSE).clicked()
+                        && let Some(dir) = rfd::FileDialog::new().pick_folder()
+                    {
+                        self.game_dir_input = dir.display().to_string();
+                        self.game_dir_error = None;
+                    }
+                });
+                if let Some(err) = &self.game_dir_error {
+                    ui.colored_label(egui::Color32::RED, err);
+                }
+                if let Some(dir) = &self.app_config.game_dir {
+                    if loaded {
+                        ui.label(format!(
+                            "{} {}",
+                            statics::EN_GAME_FOLDER_LOADED,
+                            dir.display()
+                        ));
+                    } else {
+                        ui.label(statics::EN_GAME_FOLDER_LOADING);
+                    }
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if ui.button(statics::EN_GAME_FOLDER_USE).clicked() {
+                        apply = true;
+                    }
+                    if ui.button(statics::EN_GAME_FOLDER_DETECT).clicked() {
+                        match crate::gamedata::detect_game_dir() {
+                            Some(p) => {
+                                self.game_dir_input = p.display().to_string();
+                                self.game_dir_error = None;
+                            }
+                            None => {
+                                self.game_dir_error =
+                                    Some(statics::EN_GAME_FOLDER_DETECT_FAILED.to_string());
+                            }
+                        }
+                    }
+                    if self.app_config.game_dir.is_some() {
+                        if ui.button(statics::EN_GAME_FOLDER_CLEAR).clicked() {
+                            clear = true;
+                        }
+                        if ui.button(statics::EN_GAME_FOLDER_CANCEL).clicked() {
+                            close = true;
+                        }
+                    } else if ui.button(statics::EN_GAME_FOLDER_SKIP).clicked() {
+                        skip = true;
+                    }
+                });
+            });
+        if apply {
+            self.apply_game_dir();
+        }
+        if clear {
+            self.app_config.game_dir = None;
+            self.app_config.prompt_dismissed = true;
+            self.persist_config();
+            self.game_data = None;
+            close = true;
+        }
+        if skip {
+            self.app_config.prompt_dismissed = true;
+            self.persist_config();
+            close = true;
+        }
+        if close || !open {
+            self.game_dir_dialog_open = false;
+        }
+    }
+
+    /// Chip-style editor for `traitTemplateNames`: click a trait to remove it,
+    /// search the game's trait list to add one. `catalog` is `None` when no game
+    /// folder is configured; free-text add still works then. Returns true if
+    /// `arr` changed.
+    fn render_trait_editor(
+        ui: &mut egui::Ui,
+        arr: &mut Vec<TiValue>,
+        catalog: Option<&[String]>,
+        filter: &mut String,
+    ) -> bool {
+        let mut changed = false;
+        let current: Vec<String> = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect();
+
+        ui.label(statics::EN_TRAIT_EDITOR_REMOVE_HINT);
+        let mut remove: Option<usize> = None;
+        ui.horizontal_wrapped(|ui| {
+            for (i, name) in current.iter().enumerate() {
+                let duplicate = current[..i].contains(name);
+                let unknown = catalog.is_some_and(|c| !c.contains(name));
+                let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
+                let mut tip = None;
+                if duplicate {
+                    text = text.color(egui::Color32::LIGHT_RED);
+                    tip = Some(statics::EN_TRAIT_DUPLICATE);
+                } else if unknown {
+                    text = text.color(egui::Color32::ORANGE);
+                    tip = Some(statics::EN_TRAIT_UNKNOWN);
+                }
+                let mut resp = ui.button(text);
+                if let Some(tip) = tip {
+                    resp = resp.on_hover_text(tip);
+                }
+                if resp.clicked() {
+                    remove = Some(i);
+                }
+            }
+        });
+        if let Some(i) = remove {
+            arr.remove(i);
+            changed = true;
+        }
+
+        ui.separator();
+        ui.add(
+            egui::TextEdit::singleline(filter)
+                .hint_text(statics::EN_TRAIT_SEARCH_HINT)
+                .desired_width(f32::INFINITY),
+        );
+
+        let needle = filter.trim().to_lowercase();
+        let mut add: Option<String> = None;
+        if let Some(catalog) = catalog {
+            egui::ScrollArea::vertical()
+                .id_salt("trait_picker")
+                .max_height(150.0)
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for name in catalog
+                            .iter()
+                            .filter(|n| !current.contains(n))
+                            .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
+                        {
+                            if ui.small_button(name).clicked() {
+                                add = Some(name.clone());
+                            }
+                        }
+                    });
+                });
+        } else {
+            ui.weak(statics::EN_TRAIT_NO_GAME_DATA);
+        }
+
+        let typed = filter.trim();
+        let offer_typed = !typed.is_empty()
+            && !current.iter().any(|n| n == typed)
+            && !catalog.is_some_and(|c| c.iter().any(|n| n == typed));
+        if offer_typed
+            && ui
+                .button(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed))
+                .clicked()
+        {
+            add = Some(typed.to_string());
+        }
+
+        if let Some(name) = add {
+            arr.push(TiValue::String(name));
+            filter.clear();
+            changed = true;
+        }
+        changed
+    }
+}
+
 impl eframe::App for TiseApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Undo/Redo shortcuts.
@@ -3562,6 +3846,10 @@ impl eframe::App for TiseApp {
                     .clicked()
                 {
                     self.compare_against();
+                }
+
+                if ui.button(statics::EN_BTN_GAME_FOLDER).clicked() {
+                    self.open_game_dir_dialog();
                 }
 
                 if ui.button(statics::EN_BTN_ABOUT).clicked() {
@@ -3651,6 +3939,7 @@ impl eframe::App for TiseApp {
         });
 
         self.show_update_banner(ctx);
+        self.show_game_dir_dialog(ctx);
 
         if self.changes_open {
             let mut open = self.changes_open;
