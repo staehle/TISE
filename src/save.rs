@@ -23,6 +23,34 @@ pub enum LineEnding {
     CrLf,
 }
 
+/// Declaration order is the display order in the Groups panel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GroupCategory {
+    FactionsAndPeople,
+    Earth,
+    Space,
+    Facilities,
+    MissionsAndEvents,
+    AiGoals,
+    GlobalSystem,
+    Other,
+}
+
+impl GroupCategory {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::FactionsAndPeople => statics::EN_GROUP_CAT_FACTIONS_PEOPLE,
+            Self::Earth => statics::EN_GROUP_CAT_EARTH,
+            Self::Space => statics::EN_GROUP_CAT_SPACE,
+            Self::Facilities => statics::EN_GROUP_CAT_FACILITIES,
+            Self::MissionsAndEvents => statics::EN_GROUP_CAT_MISSIONS_EVENTS,
+            Self::AiGoals => statics::EN_GROUP_CAT_AI_GOALS,
+            Self::GlobalSystem => statics::EN_GROUP_CAT_GLOBAL_SYSTEM,
+            Self::Other => statics::EN_GROUP_CAT_OTHER,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ObjectSummary {
     pub id: i64,
@@ -154,6 +182,57 @@ impl LoadedSave {
 
     pub fn group_display_name(group: &str) -> &str {
         group.strip_prefix(COMMON_NAMESPACE).unwrap_or(group)
+    }
+
+    /// Groups that hold exactly one object per save, so the Objects panel is redundant.
+    pub fn is_singleton_group(group: &str) -> bool {
+        matches!(
+            Self::group_display_name(group),
+            "TIMetadataState" | "TITimeState" | "TIGlobalResearchState" | "TIGlobalValuesState"
+        )
+    }
+
+    /// Category used to bucket a group under a collapsible header in the Groups panel.
+    pub fn group_category(group: &str) -> GroupCategory {
+        let name = Self::group_display_name(group);
+        if name.starts_with("FactionGoal_") {
+            return GroupCategory::AiGoals;
+        }
+        if name.contains("Facility") {
+            return GroupCategory::Facilities;
+        }
+        match name {
+            "TIFactionState" | "TIPlayerState" | "TICouncilorState" | "TIOrgState"
+            | "TIOfficerState" => GroupCategory::FactionsAndPeople,
+            "TINationState"
+            | "TIControlPoint"
+            | "TIArmyState"
+            | "TIWarState"
+            | "TIFederationState"
+            | "TIMegafaunaArmyState" => GroupCategory::Earth,
+            "TISpaceBodyState"
+            | "TILagrangePointState"
+            | "TIOrbitState"
+            | "TISectorState"
+            | "TISpaceFleetState"
+            | "TISpaceShipState" => GroupCategory::Space,
+            "TIMissionState" | "TIMissionPhaseState" | "TITimeEvent" => {
+                GroupCategory::MissionsAndEvents
+            }
+            "TIMetadataState"
+            | "TITimeState"
+            | "TINotificationQueueState"
+            | "TIEffectsState"
+            | "TIGlobalResearchState"
+            | "TIGlobalValuesState"
+            | "TIPromptQueueState"
+            | "TIHistoricalData" => GroupCategory::GlobalSystem,
+            _ if name.starts_with("TIRegion") => GroupCategory::Earth,
+            _ if name.starts_with("TIHab") || name.starts_with("TISpaceCombat") => {
+                GroupCategory::Space
+            }
+            _ => GroupCategory::Other,
+        }
     }
 
     pub fn game_id(&self) -> Option<i64> {
