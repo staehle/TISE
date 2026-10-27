@@ -1,4 +1,5 @@
-# Unreleased
+# 2.3.0
+Action by @lin0287:
 - Tech progress editor for `techProgress`: edit each tech's accumulated research and per-faction contributions, with faction names resolved
 - Game folder setting: on first launch TISE asks for your Terra Invicta install folder (auto-detects Steam installs), remembers it in a config file, and reads base-game and enabled-mod templates from it
 - Councilor traits editor: click traits to remove them, search the game trait list to add them, with warnings for unknown or duplicate names
