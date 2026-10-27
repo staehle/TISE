@@ -301,8 +301,8 @@ pub const EN_GAME_FOLDER_INVALID: &str = "That folder doesn't look like a Terra 
 pub const EN_GAME_FOLDER_LOADED: &str = "Game data loaded from:";
 pub const EN_GAME_FOLDER_LOADING: &str = "Loading game data...";
 
-// Councillor traits helper.
-pub const EN_TRAIT_EDITOR: &str = "Councillor traits";
+// Councilor traits helper.
+pub const EN_TRAIT_EDITOR: &str = "Councilor traits";
 pub const EN_TRAIT_EDITOR_REMOVE_HINT: &str = "Click a trait to remove it.";
 pub const EN_TRAIT_CURRENT: &str = "Current traits";
 pub const EN_TRAIT_ADD: &str = "Add trait";
