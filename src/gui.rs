@@ -43,6 +43,48 @@ pub fn run_gui() -> eframe::Result {
     )
 }
 
+/// Wording for the chip-style template-name list editor.
+struct NameListLabels {
+    title: &'static str,
+    current: &'static str,
+    remove_hint: &'static str,
+    add: &'static str,
+    search_hint: &'static str,
+    no_game_data: &'static str,
+}
+
+const NAME_LIST_TRAITS: NameListLabels = NameListLabels {
+    title: statics::EN_TRAIT_EDITOR,
+    current: statics::EN_TRAIT_CURRENT,
+    remove_hint: statics::EN_TRAIT_EDITOR_REMOVE_HINT,
+    add: statics::EN_TRAIT_ADD,
+    search_hint: statics::EN_TRAIT_SEARCH_HINT,
+    no_game_data: statics::EN_TRAIT_NO_GAME_DATA,
+};
+
+const NAME_LIST_PROJECTS: NameListLabels = NameListLabels {
+    title: statics::EN_PROJECT_EDITOR,
+    current: statics::EN_PROJECT_CURRENT,
+    remove_hint: statics::EN_PROJECT_EDITOR_REMOVE_HINT,
+    add: statics::EN_PROJECT_ADD,
+    search_hint: statics::EN_PROJECT_SEARCH_HINT,
+    no_game_data: statics::EN_PROJECT_NO_GAME_DATA,
+};
+
+const NAME_LIST_AVAILABLE_PROJECTS: NameListLabels = NameListLabels {
+    title: statics::EN_AVAILABLE_PROJECT_EDITOR,
+    ..NAME_LIST_PROJECTS
+};
+
+const NAME_LIST_TECHS: NameListLabels = NameListLabels {
+    title: statics::EN_TECH_EDITOR,
+    current: statics::EN_TECH_CURRENT,
+    remove_hint: statics::EN_TECH_EDITOR_REMOVE_HINT,
+    add: statics::EN_TECH_ADD,
+    search_hint: statics::EN_TECH_SEARCH_HINT,
+    no_game_data: statics::EN_TECH_NO_GAME_DATA,
+};
+
 /// The main application state and GUI logic.
 /// Stores the LoadedSave (owned), UI state (selection, scroll), and editor buffers.
 #[derive(Default)]
@@ -3188,23 +3230,45 @@ impl TiseApp {
                                     ui.separator();
                                 }
 
-                                let trait_helper = prop == statics::TI_PROP_TRAIT_TEMPLATE_NAMES
-                                    && matches!(&staged, TiValue::Array(a)
-                                        if a.iter().all(|v| matches!(v, TiValue::String(_))));
-                                if trait_helper && let TiValue::Array(arr) = &mut staged {
+                                let name_list = match &*prop {
+                                    statics::TI_PROP_TRAIT_TEMPLATE_NAMES => {
+                                        Some((crate::gamedata::TEMPLATE_TRAITS, &NAME_LIST_TRAITS))
+                                    }
+                                    statics::TI_PROP_FINISHED_ONE_TIME_PROJECTS => Some((
+                                        crate::gamedata::TEMPLATE_ONE_TIME_PROJECTS,
+                                        &NAME_LIST_PROJECTS,
+                                    )),
+                                    statics::TI_PROP_AVAILABLE_PROJECTS => Some((
+                                        crate::gamedata::TEMPLATE_PROJECTS,
+                                        &NAME_LIST_AVAILABLE_PROJECTS,
+                                    )),
+                                    statics::TI_PROP_FINISHED_TECHS => {
+                                        Some((crate::gamedata::TEMPLATE_TECHS, &NAME_LIST_TECHS))
+                                    }
+                                    _ => None,
+                                }
+                                .filter(|_| {
+                                    matches!(&staged, TiValue::Array(a)
+                                        if a.iter().all(|v| matches!(v, TiValue::String(_))))
+                                });
+                                let trait_helper = name_list.is_some();
+                                if let Some((template, labels)) = name_list
+                                    && let TiValue::Array(arr) = &mut staged
+                                {
                                     let game_data = self.game_data_snapshot();
                                     let catalog = game_data
                                         .as_deref()
-                                        .map(|g| g.names(crate::gamedata::TEMPLATE_TRAITS))
+                                        .map(|g| g.names(template))
                                         .filter(|c| !c.is_empty());
                                     let mut changed = false;
                                     ui.group(|ui| {
-                                        ui.label(statics::EN_TRAIT_EDITOR);
+                                        ui.label(labels.title);
                                         changed = Self::render_trait_editor(
                                             ui,
                                             arr,
                                             catalog,
                                             &mut self.trait_add_filter,
+                                            labels,
                                         );
                                     });
                                     if changed {
@@ -3846,6 +3910,7 @@ impl TiseApp {
         arr: &mut Vec<TiValue>,
         catalog: Option<&[String]>,
         filter: &mut String,
+        labels: &NameListLabels,
     ) -> bool {
         let mut changed = false;
         let current: Vec<String> = arr
@@ -3860,8 +3925,8 @@ impl TiseApp {
         // Two side-by-side panes: what the councillor has, and what can be added.
         ui.columns(2, |cols| {
             cols[0].group(|ui| {
-                ui.strong(format!("{} ({})", statics::EN_TRAIT_CURRENT, current.len()));
-                ui.weak(statics::EN_TRAIT_EDITOR_REMOVE_HINT);
+                ui.strong(format!("{} ({})", labels.current, current.len()));
+                ui.weak(labels.remove_hint);
                 ui.separator();
                 egui::ScrollArea::vertical()
                     .id_salt("trait_current")
@@ -3895,10 +3960,10 @@ impl TiseApp {
             });
 
             cols[1].group(|ui| {
-                ui.strong(statics::EN_TRAIT_ADD);
+                ui.strong(labels.add);
                 ui.add(
                     egui::TextEdit::singleline(filter)
-                        .hint_text(statics::EN_TRAIT_SEARCH_HINT)
+                        .hint_text(labels.search_hint)
                         .desired_width(f32::INFINITY),
                 );
                 ui.separator();
@@ -3925,7 +3990,7 @@ impl TiseApp {
                             }
                         });
                 } else {
-                    ui.weak(statics::EN_TRAIT_NO_GAME_DATA);
+                    ui.weak(labels.no_game_data);
                 }
 
                 let typed = filter.trim();

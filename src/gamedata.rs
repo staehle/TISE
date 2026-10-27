@@ -18,7 +18,25 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 
 /// Template files (without `.json`) loaded into the catalogue.
 pub const TEMPLATE_TRAITS: &str = "TITraitTemplate";
-const TEMPLATES_TO_LOAD: &[&str] = &[TEMPLATE_TRAITS];
+pub const TEMPLATE_PROJECTS: &str = "TIProjectTemplate";
+pub const TEMPLATE_TECHS: &str = "TITechTemplate";
+/// Catalogue key for projects with `oneTimeGlobally: true` (same file as
+/// [`TEMPLATE_PROJECTS`]).
+pub const TEMPLATE_ONE_TIME_PROJECTS: &str = "TIProjectTemplate#oneTimeGlobally";
+
+/// Catalogues to build: (key, template file without `.json`, required flag).
+/// With a flag, only entries where that boolean field is `true` are kept (an
+/// entry that later sets it false, e.g. a mod override, is dropped).
+const CATALOGUES: &[(&str, &str, Option<&str>)] = &[
+    (TEMPLATE_TRAITS, TEMPLATE_TRAITS, None),
+    (TEMPLATE_PROJECTS, TEMPLATE_PROJECTS, None),
+    (TEMPLATE_TECHS, TEMPLATE_TECHS, None),
+    (
+        TEMPLATE_ONE_TIME_PROJECTS,
+        TEMPLATE_PROJECTS,
+        Some("oneTimeGlobally"),
+    ),
+];
 
 /// File whose presence marks a directory as the game's `Templates` folder.
 const MARKER_FILE: &str = "TITraitTemplate.json";
@@ -188,15 +206,16 @@ impl GameData {
         }
 
         let mut names = BTreeMap::new();
-        for template in TEMPLATES_TO_LOAD {
+        for (key, template, flag) in CATALOGUES {
             let file = format!("{template}.json");
+            let flag = *flag;
             let mut set = BTreeSet::new();
-            collect_data_names(&paths.templates.join(&file), &mut set);
+            collect_data_names(&paths.templates.join(&file), flag, &mut set);
             for dir in &mod_dirs {
-                collect_data_names(&dir.join(&file), &mut set);
-                collect_data_names(&dir.join("Templates").join(&file), &mut set);
+                collect_data_names(&dir.join(&file), flag, &mut set);
+                collect_data_names(&dir.join("Templates").join(&file), flag, &mut set);
             }
-            names.insert((*template).to_string(), set.into_iter().collect());
+            names.insert((*key).to_string(), set.into_iter().collect());
         }
         GameData { names }
     }
@@ -204,7 +223,9 @@ impl GameData {
 
 /// Add every `dataName` in a template file to `out`. Missing or malformed
 /// files are skipped. Template files may be JSON5-ish (comments, BOM).
-fn collect_data_names(path: &Path, out: &mut BTreeSet<String>) {
+/// With `flag`, only entries where that field is `true` are kept; entries where
+/// it is not `true` are removed from `out` (later files override earlier ones).
+fn collect_data_names(path: &Path, flag: Option<&str>, out: &mut BTreeSet<String>) {
     let Ok(text) = std::fs::read_to_string(path) else {
         return;
     };
@@ -217,7 +238,12 @@ fn collect_data_names(path: &Path, out: &mut BTreeSet<String>) {
             && !name.is_empty()
             && name != "dummy"
         {
-            out.insert(name.to_string());
+            let keep = flag.is_none_or(|f| entry.get(f).and_then(|v| v.as_bool()) == Some(true));
+            if keep {
+                out.insert(name.to_string());
+            } else {
+                out.remove(name);
+            }
         }
     }
 }
