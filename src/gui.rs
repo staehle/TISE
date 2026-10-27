@@ -4840,14 +4840,10 @@ impl eframe::App for TiseApp {
 
         // Singleton groups (e.g. TIGlobalResearchState) have nothing to pick from, so
         // select their only object and skip the objects pane.
-        let singleton_object = self
-            .selected_group
-            .as_ref()
-            .filter(|g| LoadedSave::is_singleton_group(g))
-            .and_then(|g| match objects_by_group.get(g).map(Vec::as_slice) {
-                Some([only]) => Some((g.clone(), only.id)),
-                _ => None,
-            });
+        let singleton_object = self.selected_group.as_ref().and_then(|g| {
+            singleton_object_id(g, objects_by_group.get(g).map(Vec::as_slice).unwrap_or(&[]))
+                .map(|id| (g.clone(), id))
+        });
         if let Some((group, id)) = &singleton_object
             && self.selected_object_id != Some(*id)
         {
@@ -5201,12 +5197,22 @@ impl eframe::App for TiseApp {
     }
 }
 
+/// The only object of a known singleton group, or `None` when the Objects panel should show.
+fn singleton_object_id(group: &str, objects: &[crate::save::ObjectSummary]) -> Option<i64> {
+    match objects {
+        [only] if LoadedSave::is_singleton_group(group) => Some(only.id),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::TiseApp;
     use super::{
         ItemSearchHit, ItemSortKey, hab_module_construction_completed, hab_module_faction_id,
+        singleton_object_id,
     };
+    use crate::save::ObjectSummary;
     use crate::statics;
     use crate::{LoadedSave, TiValue, value::TiNumber};
     use indexmap::IndexMap;
@@ -5259,6 +5265,43 @@ mod tests {
             TiValue::Object(gamestates),
         );
         LoadedSave::from_root_for_test(TiValue::Object(root))
+    }
+
+    fn summary(id: i64) -> ObjectSummary {
+        ObjectSummary {
+            id,
+            display_name: id.to_string(),
+            index_in_group: 0,
+        }
+    }
+
+    #[test]
+    fn singleton_object_id_hides_panel_only_for_known_singletons() {
+        assert_eq!(
+            singleton_object_id("PavonisInteractive.TerraInvicta.TITimeState", &[summary(7)]),
+            Some(7)
+        );
+        assert_eq!(
+            singleton_object_id("TIGlobalResearchState", &[summary(3)]),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn singleton_object_id_keeps_panel_for_single_object_regular_groups() {
+        // Regression: a save with exactly one TIWarState must still show the Objects panel.
+        for group in ["TIWarState", "TIFederationState", "TIHabState"] {
+            assert_eq!(singleton_object_id(group, &[summary(1)]), None, "{group}");
+        }
+    }
+
+    #[test]
+    fn singleton_object_id_keeps_panel_for_empty_or_multiple_objects() {
+        assert_eq!(singleton_object_id("TITimeState", &[]), None);
+        assert_eq!(
+            singleton_object_id("TITimeState", &[summary(1), summary(2)]),
+            None
+        );
     }
 
     #[test]
