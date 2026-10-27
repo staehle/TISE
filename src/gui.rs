@@ -3659,7 +3659,7 @@ impl TiseApp {
     /// Render the "update available" banner directly under the menu bar, if the
     /// background check found a newer release and the user hasn't dismissed it.
     /// No-op while the check is pending, failed, or reported up-to-date.
-    fn show_update_banner(&mut self, ctx: &egui::Context) {
+    fn show_update_banner(&mut self, root: &mut egui::Ui) {
         if self.update_dismissed {
             return;
         }
@@ -3671,7 +3671,7 @@ impl TiseApp {
         };
 
         let mut dismiss = false;
-        egui::TopBottomPanel::top("update_banner").show(ctx, |ui| {
+        egui::Panel::top("update_banner").show(root, |ui| {
             ui.horizontal(|ui| {
                 ui.label(format!("{} {}", statics::EN_UPDATE_PREFIX, latest_tag));
                 ui.hyperlink_to(statics::EN_UPDATE_DOWNLOAD, crate::update::RELEASES_PAGE);
@@ -3957,7 +3957,8 @@ impl TiseApp {
 }
 
 impl eframe::App for TiseApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &root.ctx().clone();
         // Undo/Redo shortcuts.
         // Note: we explicitly consume these keys so egui text editors don't also apply their own
         // internal undo/redo to our edit buffers.
@@ -4003,7 +4004,7 @@ impl eframe::App for TiseApp {
             self.go_forward();
         }
 
-        egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
+        egui::Panel::top("top_bar").show(root, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 if ui.button(statics::EN_BTN_OPEN).clicked() {
                     self.open_file();
@@ -4114,7 +4115,7 @@ impl eframe::App for TiseApp {
             });
         });
 
-        self.show_update_banner(ctx);
+        self.show_update_banner(root);
         self.show_game_dir_dialog(ctx);
 
         if self.changes_open {
@@ -4209,7 +4210,7 @@ impl eframe::App for TiseApp {
         }
 
         if let Some(err) = self.last_error.clone() {
-            egui::TopBottomPanel::top("error_bar").show(ctx, |ui| {
+            egui::Panel::top("error_bar").show(root, |ui| {
                 ui.horizontal(|ui| {
                     ui.colored_label(egui::Color32::RED, err);
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -4222,7 +4223,7 @@ impl eframe::App for TiseApp {
         }
 
         if self.save.is_none() {
-            egui::CentralPanel::default().show(ctx, |ui| {
+            egui::CentralPanel::default().show(root, |ui| {
                 ui.heading(statics::EN_HOME_HEADING);
                 ui.label(statics::EN_HOME_INSTRUCTIONS);
             });
@@ -4724,7 +4725,7 @@ impl eframe::App for TiseApp {
         // The bottom status bar must be shown before side/central panels so it reserves
         // space across the full window width (otherwise it only spans the remaining
         // central area after left side panels are laid out).
-        egui::TopBottomPanel::bottom("bottom_status").show(ctx, |ui| {
+        egui::Panel::bottom("bottom_status").show(root, |ui| {
             ui.horizontal(|ui| {
                 let file_label = save
                     .source_path
@@ -4763,10 +4764,10 @@ impl eframe::App for TiseApp {
             });
         });
 
-        egui::SidePanel::left("groups_panel")
+        egui::Panel::left("groups_panel")
             .resizable(true)
-            .default_width(280.0)
-            .show(ctx, |ui| {
+            .default_size(280.0)
+            .show(root, |ui| {
                 ui.heading(statics::EN_HEADING_GROUPS);
                 ui.separator();
                 let row_h = ui.text_style_height(&egui::TextStyle::Body) + 4.0;
@@ -4851,10 +4852,10 @@ impl eframe::App for TiseApp {
         }
 
         if singleton_object.is_none() {
-            egui::SidePanel::left("objects_panel")
+            egui::Panel::left("objects_panel")
                 .resizable(true)
-                .default_width(360.0)
-                .show(ctx, |ui| {
+                .default_size(360.0)
+                .show(root, |ui| {
                     ui.heading(statics::EN_HEADING_OBJECTS);
                     ui.separator();
 
@@ -5139,7 +5140,7 @@ impl eframe::App for TiseApp {
             self.add_selected_orgs_to_faction(&mut save, faction_id);
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(root, |ui| {
             let Some(group) = self.selected_group.clone() else {
                 ui.label(statics::EN_SELECT_GROUP_LEFT);
                 return;

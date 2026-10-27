@@ -118,9 +118,18 @@ pub fn resolve_game_paths(chosen: &Path) -> Option<GamePaths> {
     })
 }
 
-/// Look for a Steam install of Terra Invicta in the usual places, including
-/// extra Steam library folders listed in `libraryfolders.vdf`.
+/// Look for a Steam, GOG, or Epic install of Terra Invicta in the usual places.
 pub fn detect_game_dir() -> Option<PathBuf> {
+    steam_candidates()
+        .into_iter()
+        .chain(gog_candidates())
+        .chain(epic_candidates())
+        .chain(heroic_candidates())
+        .find(|p| resolve_game_paths(p).is_some())
+}
+
+/// Steam installs, including extra library folders listed in `libraryfolders.vdf`.
+fn steam_candidates() -> Vec<PathBuf> {
     let mut steam_roots: Vec<PathBuf> = Vec::new();
     if cfg!(windows) {
         for var in ["ProgramFiles(x86)", "ProgramFiles"] {
@@ -145,7 +154,128 @@ pub fn detect_game_dir() -> Option<PathBuf> {
     libraries
         .into_iter()
         .map(|lib| lib.join("steamapps/common/Terra Invicta"))
-        .find(|p| resolve_game_paths(p).is_some())
+        .collect()
+}
+
+/// GOG installs: every game path GOG registers (the Templates marker picks out
+/// Terra Invicta), then the Galaxy and offline-installer default folders.
+fn gog_candidates() -> Vec<PathBuf> {
+    let mut out = gog_registry_paths();
+    if cfg!(windows) {
+        if let Some(p) = std::env::var_os("ProgramFiles(x86)") {
+            out.push(PathBuf::from(p).join("GOG Galaxy/Games/Terra Invicta"));
+        }
+        let drive = std::env::var_os("SystemDrive").unwrap_or_else(|| "C:".into());
+        let mut root = drive;
+        root.push("\\");
+        out.push(PathBuf::from(root).join("GOG Games/Terra Invicta"));
+    }
+    out
+}
+
+#[cfg(windows)]
+fn gog_registry_paths() -> Vec<PathBuf> {
+    use windows_registry::LOCAL_MACHINE;
+    let Ok(games) = LOCAL_MACHINE.open(r"SOFTWARE\WOW6432Node\GOG.com\Games") else {
+        return Vec::new();
+    };
+    let Ok(ids) = games.keys() else {
+        return Vec::new();
+    };
+    ids.filter_map(|id| games.open(&id).ok()?.get_string("path").ok())
+        .map(PathBuf::from)
+        .collect()
+}
+
+#[cfg(not(windows))]
+fn gog_registry_paths() -> Vec<PathBuf> {
+    Vec::new()
+}
+
+/// Epic Games Store installs, from the launcher's per-game `.item` manifests,
+/// then the default library folder.
+fn epic_candidates() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if !cfg!(windows) {
+        return out;
+    }
+    if let Some(data) = std::env::var_os("ProgramData") {
+        let manifests = PathBuf::from(data).join("Epic/EpicGamesLauncher/Data/Manifests");
+        if let Ok(rd) = std::fs::read_dir(manifests) {
+            for entry in rd.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "item") {
+                    out.extend(json_paths_under_key(&path, "InstallLocation"));
+                }
+            }
+        }
+    }
+    if let Some(p) = std::env::var_os("ProgramFiles") {
+        out.push(PathBuf::from(p).join("Epic Games/TerraInvicta"));
+    }
+    out
+}
+
+/// GOG and Epic installs made through the Heroic launcher (Linux/macOS).
+fn heroic_candidates() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if cfg!(windows) {
+        return out;
+    }
+    let Some(home) = home_dir() else {
+        return out;
+    };
+    let mut config_dirs = vec![
+        home.join(".config/heroic"),
+        home.join(".var/app/com.heroicgameslauncher.hgl/config/heroic"),
+        home.join("Library/Application Support/heroic"),
+    ];
+    if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from)
+        && xdg.is_absolute()
+    {
+        config_dirs.insert(0, xdg.join("heroic"));
+    }
+    for dir in &config_dirs {
+        out.extend(json_paths_under_key(
+            &dir.join("gog_store/installed.json"),
+            "install_path",
+        ));
+        out.extend(json_paths_under_key(
+            &dir.join("legendaryConfig/legendary/installed.json"),
+            "install_path",
+        ));
+    }
+    out.push(home.join("Games/Heroic/Terra Invicta"));
+    out.push(home.join("Games/Heroic/TerraInvicta"));
+    out
+}
+
+/// Every string value stored under `key`, at any depth, in a JSON file.
+/// Missing or malformed files yield nothing.
+fn json_paths_under_key(path: &Path, key: &str) -> Vec<PathBuf> {
+    fn walk(v: &serde_json::Value, key: &str, out: &mut Vec<PathBuf>) {
+        match v {
+            serde_json::Value::Object(map) => {
+                for (k, child) in map {
+                    match child {
+                        serde_json::Value::String(s) if k == key && !s.is_empty() => {
+                            out.push(PathBuf::from(s));
+                        }
+                        _ => walk(child, key, out),
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => items.iter().for_each(|i| walk(i, key, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if let Ok(text) = std::fs::read_to_string(path)
+        && let Ok(v) = serde_json::from_str::<serde_json::Value>(&text)
+    {
+        walk(&v, key, &mut out);
+    }
+    out
 }
 
 /// Extract `"path"  "<dir>"` entries from a Steam `libraryfolders.vdf`.
@@ -320,6 +450,33 @@ mod tests {
             ["Affluent", "ModTrait", "Physicist"]
         );
         assert!(data.names("Nonexistent").is_empty());
+    }
+
+    #[test]
+    fn finds_install_paths_in_launcher_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let epic = dir.path().join("game.item");
+        std::fs::write(
+            &epic,
+            r#"{"DisplayName":"Terra Invicta","InstallLocation":"C:/Program Files/Epic Games/TerraInvicta"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            json_paths_under_key(&epic, "InstallLocation"),
+            vec![PathBuf::from("C:/Program Files/Epic Games/TerraInvicta")]
+        );
+
+        let heroic = dir.path().join("installed.json");
+        std::fs::write(
+            &heroic,
+            r#"{"installed":[{"appName":"1235051722","install_path":"/home/u/Games/Heroic/Terra Invicta"},{"install_path":""}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            json_paths_under_key(&heroic, "install_path"),
+            vec![PathBuf::from("/home/u/Games/Heroic/Terra Invicta")]
+        );
+        assert!(json_paths_under_key(&dir.path().join("missing.json"), "x").is_empty());
     }
 
     #[test]

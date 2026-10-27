@@ -1,3 +1,8 @@
+# 2.3.1
+- Game folder auto-detect now also finds GOG (Galaxy and offline installers, via GOG's registry entries) and Epic Games Store installs, plus GOG/Epic installs made through the Heroic launcher on Linux
+- Updated egui/eframe to 0.37 (still using the OpenGL renderer)
+- Avoid json5 1.3.4, which made loading large saves extremely slow
+
 # 2.3.0
 Action by @lin0287:
 - Tech progress editor for `techProgress`: edit each tech's accumulated research and per-faction contributions, with faction names resolved
