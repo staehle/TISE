@@ -184,6 +184,14 @@ impl LoadedSave {
         group.strip_prefix(COMMON_NAMESPACE).unwrap_or(group)
     }
 
+    /// Groups that hold exactly one object per save, so the Objects panel is redundant.
+    pub fn is_singleton_group(group: &str) -> bool {
+        matches!(
+            Self::group_display_name(group),
+            "TIMetadataState" | "TITimeState" | "TIGlobalResearchState" | "TIGlobalValuesState"
+        )
+    }
+
     /// Category used to bucket a group under a collapsible header in the Groups panel.
     pub fn group_category(group: &str) -> GroupCategory {
         let name = Self::group_display_name(group);

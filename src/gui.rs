@@ -4840,12 +4840,14 @@ impl eframe::App for TiseApp {
 
         // Singleton groups (e.g. TIGlobalResearchState) have nothing to pick from, so
         // select their only object and skip the objects pane.
-        let singleton_object = self.selected_group.as_ref().and_then(|g| {
-            match objects_by_group.get(g).map(Vec::as_slice) {
+        let singleton_object = self
+            .selected_group
+            .as_ref()
+            .filter(|g| LoadedSave::is_singleton_group(g))
+            .and_then(|g| match objects_by_group.get(g).map(Vec::as_slice) {
                 Some([only]) => Some((g.clone(), only.id)),
                 _ => None,
-            }
-        });
+            });
         if let Some((group, id)) = &singleton_object
             && self.selected_object_id != Some(*id)
         {
