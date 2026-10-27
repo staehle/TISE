@@ -266,6 +266,22 @@ pub const EN_TECH_PROGRESS_EDITOR: &str = "Tech progress editor";
 pub const EN_LABEL_ACCUMULATED_RESEARCH: &str = "Accumulated research:";
 pub const EN_LABEL_FACTION_CONTRIBUTIONS: &str = "Faction contributions";
 
+// Faction project progress entries (TIFactionState.currentProjectProgress).
+pub const TI_PROP_CURRENT_PROJECT_PROGRESS: &str = "currentProjectProgress";
+pub const TI_FIELD_PROJECT_TEMPLATE_NAME: &str = "projectTemplateName";
+pub const TI_FIELD_SLOT: &str = "slot";
+pub const TI_FIELD_COMPLETED: &str = "completed";
+
+// Project progress editor UI strings.
+pub const EN_PROJECT_PROGRESS_EDITOR: &str = "Project progress editor";
+pub const EN_LABEL_SLOT: &str = "Slot:";
+pub const EN_LABEL_COMPLETED: &str = "Completed";
+pub const EN_BTN_REMOVE: &str = "Remove";
+pub const EN_PROJECT_PROGRESS_EMPTY: &str = "No projects in progress.";
+pub const EN_PROJECT_PROGRESS_ADD: &str = "Add project in progress";
+pub const EN_PROJECT_PROGRESS_SEARCH_HINT: &str = "Search projects (or type a name)...";
+pub const EN_PROJECT_PROGRESS_ADD_BTN: &str = "Add";
+
 // Faction filter UI strings.
 pub const EN_LABEL_FILTER_FACTION: &str = "Faction:";
 pub const EN_FILTER_ALL_FACTIONS: &str = "All Factions";

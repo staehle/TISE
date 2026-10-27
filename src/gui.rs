@@ -3230,7 +3230,33 @@ impl TiseApp {
                                     ui.separator();
                                 }
 
-                                let name_list = match &*prop {
+                                if prop == statics::TI_PROP_CURRENT_PROJECT_PROGRESS
+                                    && let TiValue::Array(arr) = &mut staged
+                                    && is_project_progress(arr)
+                                {
+                                    let game_data = self.game_data_snapshot();
+                                    let catalog = game_data
+                                        .as_deref()
+                                        .map(|g| g.names(crate::gamedata::TEMPLATE_PROJECTS))
+                                        .filter(|c| !c.is_empty());
+                                    let mut changed = false;
+                                    ui.group(|ui| {
+                                        ui.label(statics::EN_PROJECT_PROGRESS_EDITOR);
+                                        changed = Self::render_project_progress_editor(
+                                            ui,
+                                            arr,
+                                            catalog,
+                                            &mut self.trait_add_filter,
+                                        );
+                                    });
+                                    if changed {
+                                        self.edit_buffer = staged.to_ti_save_pretty();
+                                        self.last_error = None;
+                                    }
+                                    ui.separator();
+                                }
+
+                                let name_list = match prop {
                                     statics::TI_PROP_TRAIT_TEMPLATE_NAMES => {
                                         Some((crate::gamedata::TEMPLATE_TRAITS, &NAME_LIST_TRAITS))
                                     }
@@ -3448,6 +3474,163 @@ impl TiseApp {
                 });
             });
         changed_any
+    }
+
+    /// One card per in-progress project: editable accumulated research, slot and
+    /// completed flag, plus a remove button and an "add project" picker.
+    fn render_project_progress_editor(
+        ui: &mut egui::Ui,
+        projects: &mut Vec<TiValue>,
+        catalog: Option<&[String]>,
+        filter: &mut String,
+    ) -> bool {
+        use crate::value::TiNumber;
+
+        let mut changed = false;
+        let mut remove: Option<usize> = None;
+
+        if projects.is_empty() {
+            ui.weak(statics::EN_PROJECT_PROGRESS_EMPTY);
+        }
+        egui::ScrollArea::horizontal()
+            .id_salt("project_progress_scroll")
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    for (idx, project) in projects.iter_mut().enumerate() {
+                        let Some(map) = project.as_object_mut() else {
+                            continue;
+                        };
+                        let name = map
+                            .get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)
+                            .and_then(TiValue::as_str)
+                            .unwrap_or(statics::EN_EMPTY)
+                            .to_string();
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                ui.strong(name);
+                                if let Some(TiValue::Number(n)) =
+                                    map.get_mut(statics::TI_FIELD_ACCUMULATED_RESEARCH)
+                                {
+                                    ui.horizontal(|ui| {
+                                        ui.label(statics::EN_LABEL_ACCUMULATED_RESEARCH);
+                                        changed |= Self::edit_number(ui, n);
+                                    });
+                                }
+                                if let Some(TiValue::Number(n)) =
+                                    map.get_mut(statics::TI_FIELD_SLOT)
+                                {
+                                    ui.horizontal(|ui| {
+                                        ui.label(statics::EN_LABEL_SLOT);
+                                        changed |= Self::edit_number(ui, n);
+                                    });
+                                }
+                                if let Some(TiValue::Bool(b)) =
+                                    map.get_mut(statics::TI_FIELD_COMPLETED)
+                                {
+                                    changed |=
+                                        ui.checkbox(b, statics::EN_LABEL_COMPLETED).changed();
+                                }
+                                if ui.button(statics::EN_BTN_REMOVE).clicked() {
+                                    remove = Some(idx);
+                                }
+                            });
+                        });
+                    }
+                });
+            });
+
+        ui.separator();
+        ui.strong(statics::EN_PROJECT_PROGRESS_ADD);
+        ui.add(
+            egui::TextEdit::singleline(filter)
+                .hint_text(statics::EN_PROJECT_PROGRESS_SEARCH_HINT)
+                .desired_width(f32::INFINITY),
+        );
+
+        let in_use: Vec<&str> = projects
+            .iter()
+            .filter_map(|p| {
+                p.get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)
+                    .and_then(TiValue::as_str)
+            })
+            .collect();
+        let needle = filter.trim().to_lowercase();
+        let mut add: Option<String> = None;
+
+        if let Some(catalog) = catalog {
+            egui::ScrollArea::vertical()
+                .id_salt("project_progress_picker")
+                .min_scrolled_height(140.0)
+                .max_height(140.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for name in catalog
+                        .iter()
+                        .filter(|n| !in_use.contains(&n.as_str()))
+                        .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
+                    {
+                        let row = egui::Button::new(format!("+  {name}"))
+                            .frame(false)
+                            .min_size(egui::vec2(ui.available_width(), 0.0));
+                        if ui.add(row).clicked() {
+                            add = Some(name.clone());
+                        }
+                    }
+                });
+        } else {
+            ui.weak(statics::EN_PROJECT_NO_GAME_DATA);
+        }
+
+        let typed = filter.trim();
+        if !typed.is_empty()
+            && !in_use.contains(&typed)
+            && !catalog.is_some_and(|c| c.iter().any(|n| n == typed))
+            && ui
+                .button(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed))
+                .clicked()
+        {
+            add = Some(typed.to_string());
+        }
+
+        if let Some(i) = remove {
+            projects.remove(i);
+            changed = true;
+        }
+
+        if let Some(name) = add {
+            // New project goes into the first free slot.
+            let used_slots: Vec<i64> = projects
+                .iter()
+                .filter_map(|p| match p.get(statics::TI_FIELD_SLOT) {
+                    Some(TiValue::Number(n)) => n.as_i64(),
+                    _ => None,
+                })
+                .collect();
+            let slot = (0..).find(|s| !used_slots.contains(s)).unwrap_or(0);
+
+            let mut entry = indexmap::IndexMap::new();
+            entry.insert(
+                statics::TI_FIELD_PROJECT_TEMPLATE_NAME.to_string(),
+                TiValue::String(name),
+            );
+            entry.insert(
+                statics::TI_FIELD_ACCUMULATED_RESEARCH.to_string(),
+                TiValue::Number(TiNumber::F64(0.0)),
+            );
+            entry.insert(
+                statics::TI_FIELD_SLOT.to_string(),
+                TiValue::Number(TiNumber::I64(slot)),
+            );
+            entry.insert(
+                statics::TI_FIELD_COMPLETED.to_string(),
+                TiValue::Bool(false),
+            );
+            projects.push(TiValue::Object(entry));
+            filter.clear();
+            changed = true;
+        }
+
+        changed
     }
 
     fn render_ref_list_table(
@@ -3692,6 +3875,24 @@ fn is_tech_progress(items: &[TiValue]) -> bool {
                         })
                     })
         })
+}
+
+/// Matches the `currentProjectProgress` shape: objects with a project name,
+/// numeric accumulated research and slot, and a completed flag. May be empty.
+fn is_project_progress(items: &[TiValue]) -> bool {
+    items.iter().all(|item| {
+        item.get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)
+            .is_some_and(|v| v.as_str().is_some())
+            && matches!(
+                item.get(statics::TI_FIELD_ACCUMULATED_RESEARCH),
+                Some(TiValue::Number(_))
+            )
+            && matches!(item.get(statics::TI_FIELD_SLOT), Some(TiValue::Number(_)))
+            && matches!(
+                item.get(statics::TI_FIELD_COMPLETED),
+                Some(TiValue::Bool(_))
+            )
+    })
 }
 
 fn array_of_key_value_refs(val: &TiValue) -> Option<Vec<(i64, String)>> {
