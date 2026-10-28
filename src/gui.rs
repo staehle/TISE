@@ -3993,8 +3993,6 @@ fn is_tech_progress(items: &[TiValue]) -> bool {
         })
 }
 
-/// Matches the `currentProjectProgress` shape: objects with a project name,
-/// numeric accumulated research and slot, and a completed flag. May be empty.
 /// Faction fields that decide which projects and slots are valid.
 struct ProjectFactionInfo {
     available: Vec<String>,
@@ -4024,6 +4022,8 @@ impl ProjectFactionInfo {
     }
 }
 
+/// Matches the `currentProjectProgress` shape: objects with a project name,
+/// numeric accumulated research and slot, and a completed flag. May be empty.
 fn is_project_progress(items: &[TiValue]) -> bool {
     items.iter().all(|item| {
         item.get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)

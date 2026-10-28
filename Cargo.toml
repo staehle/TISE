@@ -6,7 +6,7 @@ homepage = "https://github.com/staehle/tise"
 repository = "https://github.com/staehle/tise"
 license-file = "LICENSE"
 categories = ["games"]
-version = "2.3.1"
+version = "2.3.2"
 edition = "2024"
 
 [lib]
