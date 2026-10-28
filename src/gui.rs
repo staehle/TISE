@@ -3239,6 +3239,54 @@ impl TiseApp {
                                         .as_deref()
                                         .map(|g| g.names(crate::gamedata::TEMPLATE_PROJECTS))
                                         .filter(|c| !c.is_empty());
+                                    let names_of = |key: &str| -> Vec<String> {
+                                        value_obj
+                                            .get(key)
+                                            .and_then(|v| match v {
+                                                TiValue::Array(a) => Some(
+                                                    a.iter()
+                                                        .filter_map(TiValue::as_str)
+                                                        .map(str::to_string)
+                                                        .collect(),
+                                                ),
+                                                _ => None,
+                                            })
+                                            .unwrap_or_default()
+                                    };
+                                    let flag = |key: &str| {
+                                        matches!(value_obj.get(key), Some(TiValue::Bool(true)))
+                                    };
+                                    let costs = game_data
+                                        .as_deref()
+                                        .map(|g| {
+                                            arr.iter()
+                                                .filter_map(|p| {
+                                                    let n = p
+                                                        .get(
+                                                            statics::TI_FIELD_PROJECT_TEMPLATE_NAME,
+                                                        )?
+                                                        .as_str()?;
+                                                    Some((n.to_string(), g.project_cost(n)?))
+                                                })
+                                                .collect()
+                                        })
+                                        .unwrap_or_default();
+                                    let faction = ProjectFactionInfo {
+                                        costs,
+                                        available: names_of(statics::TI_PROP_AVAILABLE_PROJECTS),
+                                        finished: names_of(statics::TI_PROP_FINISHED_PROJECTS),
+                                        org_slot: flag(statics::TI_PROP_ORG_SLOT_UNLOCKED),
+                                        hab_slot: flag(statics::TI_PROP_HAB_SLOT_UNLOCKED),
+                                        repeatable: game_data
+                                            .as_deref()
+                                            .map(|g| {
+                                                g.names(
+                                                    crate::gamedata::TEMPLATE_REPEATABLE_PROJECTS,
+                                                )
+                                                .to_vec()
+                                            })
+                                            .unwrap_or_default(),
+                                    };
                                     let mut changed = false;
                                     ui.group(|ui| {
                                         ui.label(statics::EN_PROJECT_PROGRESS_EDITOR);
@@ -3246,6 +3294,7 @@ impl TiseApp {
                                             ui,
                                             arr,
                                             catalog,
+                                            &faction,
                                             &mut self.trait_add_filter,
                                         );
                                     });
@@ -3482,6 +3531,7 @@ impl TiseApp {
         ui: &mut egui::Ui,
         projects: &mut Vec<TiValue>,
         catalog: Option<&[String]>,
+        faction: &ProjectFactionInfo,
         filter: &mut String,
     ) -> bool {
         use crate::value::TiNumber;
@@ -3505,9 +3555,34 @@ impl TiseApp {
                             .and_then(TiValue::as_str)
                             .unwrap_or(statics::EN_EMPTY)
                             .to_string();
+                        let bad_slot = matches!(
+                            map.get(statics::TI_FIELD_SLOT),
+                            Some(TiValue::Number(n)) if n.as_i64().is_some_and(|s| s < 3)
+                        );
+                        let cost = faction.costs.get(&name).copied();
+                        // Times a repeatable project was already finished.
+                        let repeat_count = if faction.repeatable.contains(&name) {
+                            faction.finished.iter().filter(|n| **n == name).count()
+                        } else {
+                            0
+                        };
+                        let finished =
+                            faction.finished.contains(&name) && !faction.repeatable.contains(&name);
                         ui.group(|ui| {
                             ui.vertical(|ui| {
                                 ui.strong(name);
+                                if bad_slot {
+                                    ui.colored_label(
+                                        ui.visuals().warn_fg_color,
+                                        statics::EN_PROJECT_WARN_BAD_SLOT,
+                                    );
+                                }
+                                if finished {
+                                    ui.colored_label(
+                                        ui.visuals().warn_fg_color,
+                                        statics::EN_PROJECT_WARN_FINISHED,
+                                    );
+                                }
                                 if let Some(TiValue::Number(n)) =
                                     map.get_mut(statics::TI_FIELD_ACCUMULATED_RESEARCH)
                                 {
@@ -3516,6 +3591,30 @@ impl TiseApp {
                                         changed |= Self::edit_number(ui, n);
                                     });
                                 }
+                                match cost {
+                                    Some(c) if c >= 0.0 => {
+                                        if repeat_count > 0 {
+                                            // Repeatable cost grows by the base cost per completion.
+                                            ui.label(format!(
+                                                "{} {} (base {c} x {}, researched {repeat_count}x)",
+                                                statics::EN_LABEL_RESEARCH_COST,
+                                                c * (1 + repeat_count) as f64,
+                                                1 + repeat_count,
+                                            ));
+                                        } else {
+                                            ui.label(format!(
+                                                "{} {c}",
+                                                statics::EN_LABEL_RESEARCH_COST
+                                            ));
+                                        }
+                                    }
+                                    Some(_) => {
+                                        ui.weak(statics::EN_PROJECT_COST_NOT_RESEARCHABLE);
+                                    }
+                                    None => {
+                                        ui.weak(statics::EN_PROJECT_COST_UNKNOWN);
+                                    }
+                                }
                                 if let Some(TiValue::Number(n)) =
                                     map.get_mut(statics::TI_FIELD_SLOT)
                                 {
@@ -3523,12 +3622,6 @@ impl TiseApp {
                                         ui.label(statics::EN_LABEL_SLOT);
                                         changed |= Self::edit_number(ui, n);
                                     });
-                                }
-                                if let Some(TiValue::Bool(b)) =
-                                    map.get_mut(statics::TI_FIELD_COMPLETED)
-                                {
-                                    changed |=
-                                        ui.checkbox(b, statics::EN_LABEL_COMPLETED).changed();
                                 }
                                 if ui.button(statics::EN_BTN_REMOVE).clicked() {
                                     remove = Some(idx);
@@ -3557,7 +3650,27 @@ impl TiseApp {
         let needle = filter.trim().to_lowercase();
         let mut add: Option<String> = None;
 
-        if let Some(catalog) = catalog {
+        let used_slots: Vec<i64> = projects
+            .iter()
+            .filter_map(|p| match p.get(statics::TI_FIELD_SLOT) {
+                Some(TiValue::Number(n)) => n.as_i64(),
+                _ => None,
+            })
+            .collect();
+        let next_slot = faction.next_free_slot(&used_slots);
+        if next_slot.is_none() {
+            ui.colored_label(ui.visuals().warn_fg_color, statics::EN_PROJECT_WARN_NO_SLOT);
+        }
+
+        // Only offer projects the faction can actually research; fall back to
+        // the full catalogue when the faction has no available list.
+        let offered: Option<&[String]> = if faction.available.is_empty() {
+            catalog
+        } else {
+            Some(&faction.available)
+        };
+
+        if let Some(catalog) = offered {
             egui::ScrollArea::vertical()
                 .id_salt("project_progress_picker")
                 .min_scrolled_height(140.0)
@@ -3566,13 +3679,13 @@ impl TiseApp {
                 .show(ui, |ui| {
                     for name in catalog
                         .iter()
-                        .filter(|n| !in_use.contains(&n.as_str()))
+                        .filter(|n| faction.repeatable.contains(n) || !in_use.contains(&n.as_str()))
                         .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
                     {
                         let row = egui::Button::new(format!("+  {name}"))
                             .frame(false)
                             .min_size(egui::vec2(ui.available_width(), 0.0));
-                        if ui.add(row).clicked() {
+                        if ui.add_enabled(next_slot.is_some(), row).clicked() {
                             add = Some(name.clone());
                         }
                     }
@@ -3583,13 +3696,26 @@ impl TiseApp {
 
         let typed = filter.trim();
         if !typed.is_empty()
-            && !in_use.contains(&typed)
-            && !catalog.is_some_and(|c| c.iter().any(|n| n == typed))
-            && ui
-                .button(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed))
-                .clicked()
+            && (faction.repeatable.iter().any(|n| n == typed) || !in_use.contains(&typed))
+            && !offered.is_some_and(|c| c.iter().any(|n| n == typed))
         {
-            add = Some(typed.to_string());
+            if faction.finished.iter().any(|n| n == typed)
+                && !faction.repeatable.iter().any(|n| n == typed)
+            {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    statics::EN_PROJECT_WARN_FINISHED_TYPED,
+                );
+            }
+            if ui
+                .add_enabled(
+                    next_slot.is_some(),
+                    egui::Button::new(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed)),
+                )
+                .clicked()
+            {
+                add = Some(typed.to_string());
+            }
         }
 
         if let Some(i) = remove {
@@ -3597,17 +3723,7 @@ impl TiseApp {
             changed = true;
         }
 
-        if let Some(name) = add {
-            // New project goes into the first free slot.
-            let used_slots: Vec<i64> = projects
-                .iter()
-                .filter_map(|p| match p.get(statics::TI_FIELD_SLOT) {
-                    Some(TiValue::Number(n)) => n.as_i64(),
-                    _ => None,
-                })
-                .collect();
-            let slot = (0..).find(|s| !used_slots.contains(s)).unwrap_or(0);
-
+        if let (Some(name), Some(slot)) = (add, next_slot) {
             let mut entry = indexmap::IndexMap::new();
             entry.insert(
                 statics::TI_FIELD_PROJECT_TEMPLATE_NAME.to_string(),
@@ -3879,6 +3995,35 @@ fn is_tech_progress(items: &[TiValue]) -> bool {
 
 /// Matches the `currentProjectProgress` shape: objects with a project name,
 /// numeric accumulated research and slot, and a completed flag. May be empty.
+/// Faction fields that decide which projects and slots are valid.
+struct ProjectFactionInfo {
+    available: Vec<String>,
+    finished: Vec<String>,
+    org_slot: bool,
+    hab_slot: bool,
+    /// Projects that may be in progress several times and re-finished.
+    repeatable: Vec<String>,
+    /// Template `researchCost` for the projects currently in progress.
+    costs: std::collections::HashMap<String, f64>,
+}
+
+impl ProjectFactionInfo {
+    /// First free slot in 3, 4 (org unlocked), 5 (hab unlocked), then 6+.
+    /// Slots 0-2 are ignored by the game. We don't know how many 6+ slots a
+    /// faction has, so 6 is always allowed (the game uses it when 4/5 are
+    /// locked) and 7+ only when a higher slot is already in use.
+    fn next_free_slot(&self, used: &[i64]) -> Option<i64> {
+        let low = [(3, true), (4, self.org_slot), (5, self.hab_slot)];
+        if let Some((s, _)) = low.iter().find(|(s, ok)| *ok && !used.contains(s)) {
+            return Some(*s);
+        }
+        let max_used = used.iter().copied().max().unwrap_or(0);
+        (6..)
+            .find(|s| !used.contains(s))
+            .filter(|s| *s <= 6 || *s < max_used)
+    }
+}
+
 fn is_project_progress(items: &[TiValue]) -> bool {
     items.iter().all(|item| {
         item.get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)

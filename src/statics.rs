@@ -214,6 +214,9 @@ pub const TI_PROP_TRAIT_TEMPLATE_NAMES: &str = "traitTemplateNames";
 pub const TI_PROP_FINISHED_ONE_TIME_PROJECTS: &str = "finishedOneTimeOnlyProjectNames";
 pub const TI_PROP_AVAILABLE_PROJECTS: &str = "availableProjectNames";
 pub const TI_PROP_FINISHED_TECHS: &str = "finishedTechsNames";
+pub const TI_PROP_FINISHED_PROJECTS: &str = "finishedProjectNames";
+pub const TI_PROP_ORG_SLOT_UNLOCKED: &str = "orgProjectSlotUnlocked";
+pub const TI_PROP_HAB_SLOT_UNLOCKED: &str = "habProjectSlotUnlocked";
 pub const TI_PUBLIC_OPINION_UNDECIDED: &str = "Undecided";
 
 // Common public-opinion outcomes (color-coded in the editor).
@@ -275,12 +278,21 @@ pub const TI_FIELD_COMPLETED: &str = "completed";
 // Project progress editor UI strings.
 pub const EN_PROJECT_PROGRESS_EDITOR: &str = "Project progress editor";
 pub const EN_LABEL_SLOT: &str = "Slot:";
-pub const EN_LABEL_COMPLETED: &str = "Completed";
+pub const EN_LABEL_RESEARCH_COST: &str = "Research cost:";
+pub const EN_PROJECT_COST_NOT_RESEARCHABLE: &str = "Research cost: not researchable";
+pub const EN_PROJECT_COST_UNKNOWN: &str = "Research cost: unknown";
 pub const EN_BTN_REMOVE: &str = "Remove";
 pub const EN_PROJECT_PROGRESS_EMPTY: &str = "No projects in progress.";
 pub const EN_PROJECT_PROGRESS_ADD: &str = "Add project in progress";
 pub const EN_PROJECT_PROGRESS_SEARCH_HINT: &str = "Search projects (or type a name)...";
 pub const EN_PROJECT_PROGRESS_ADD_BTN: &str = "Add";
+pub const EN_PROJECT_WARN_BAD_SLOT: &str =
+    "Slot is below 3: the game ignores this entry and never shows it.";
+pub const EN_PROJECT_WARN_FINISHED: &str =
+    "Project is already finished: the game ignores this entry.";
+pub const EN_PROJECT_WARN_FINISHED_TYPED: &str =
+    "This project is already finished; the game would ignore a new entry.";
+pub const EN_PROJECT_WARN_NO_SLOT: &str = "No free project slot is known for this faction (slots 3, 4 if org slot unlocked, 5 if hab slot unlocked, then 6+). Remove a project first.";
 
 // Faction filter UI strings.
 pub const EN_LABEL_FILTER_FACTION: &str = "Faction:";

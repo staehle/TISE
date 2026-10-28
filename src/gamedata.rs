@@ -23,6 +23,8 @@ pub const TEMPLATE_TECHS: &str = "TITechTemplate";
 /// Catalogue key for projects with `oneTimeGlobally: true` (same file as
 /// [`TEMPLATE_PROJECTS`]).
 pub const TEMPLATE_ONE_TIME_PROJECTS: &str = "TIProjectTemplate#oneTimeGlobally";
+/// Catalogue key for projects with `repeatable: true`.
+pub const TEMPLATE_REPEATABLE_PROJECTS: &str = "TIProjectTemplate#repeatable";
 
 /// Catalogues to build: (key, template file without `.json`, required flag).
 /// With a flag, only entries where that boolean field is `true` are kept (an
@@ -35,6 +37,11 @@ const CATALOGUES: &[(&str, &str, Option<&str>)] = &[
         TEMPLATE_ONE_TIME_PROJECTS,
         TEMPLATE_PROJECTS,
         Some("oneTimeGlobally"),
+    ),
+    (
+        TEMPLATE_REPEATABLE_PROJECTS,
+        TEMPLATE_PROJECTS,
+        Some("repeatable"),
     ),
 ];
 
@@ -183,12 +190,19 @@ fn parse_library_paths(vdf: &str) -> Vec<PathBuf> {
 #[derive(Debug, Default)]
 pub struct GameData {
     names: BTreeMap<String, Vec<String>>,
+    /// `researchCost` per project `dataName` (negative = not researchable).
+    project_costs: BTreeMap<String, f64>,
 }
 
 impl GameData {
     /// Sorted `dataName`s for a template (e.g. [`TEMPLATE_TRAITS`]).
     pub fn names(&self, template: &str) -> &[String] {
         self.names.get(template).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// Research cost of a project, if the template defines one.
+    pub fn project_cost(&self, name: &str) -> Option<f64> {
+        self.project_costs.get(name).copied()
     }
 
     /// Parse the base templates, then merge in enabled mods' overrides/additions.
@@ -217,14 +231,25 @@ impl GameData {
             }
             names.insert((*key).to_string(), set.into_iter().collect());
         }
-        GameData { names }
+        let mut project_costs = BTreeMap::new();
+        let file = format!("{TEMPLATE_PROJECTS}.json");
+        collect_project_costs(&paths.templates.join(&file), &mut project_costs);
+        for dir in &mod_dirs {
+            collect_project_costs(&dir.join(&file), &mut project_costs);
+            collect_project_costs(&dir.join("Templates").join(&file), &mut project_costs);
+        }
+        GameData {
+            names,
+            project_costs,
+        }
     }
 }
 
 /// Add every `dataName` in a template file to `out`. Missing or malformed
 /// files are skipped. Template files may be JSON5-ish (comments, BOM).
-/// With `flag`, only entries where that field is `true` are kept; entries where
-/// it is not `true` are removed from `out` (later files override earlier ones).
+/// With `flag`, entries where that field is `true` are added and entries where
+/// it is `false` are removed (later files override earlier ones); entries
+/// missing the field are left alone so mod overrides needn't repeat it.
 fn collect_data_names(path: &Path, flag: Option<&str>, out: &mut BTreeSet<String>) {
     let Ok(text) = std::fs::read_to_string(path) else {
         return;
@@ -238,12 +263,34 @@ fn collect_data_names(path: &Path, flag: Option<&str>, out: &mut BTreeSet<String
             && !name.is_empty()
             && name != "dummy"
         {
-            let keep = flag.is_none_or(|f| entry.get(f).and_then(|v| v.as_bool()) == Some(true));
-            if keep {
-                out.insert(name.to_string());
-            } else {
-                out.remove(name);
+            match flag.map(|f| entry.get(f).and_then(|v| v.as_bool())) {
+                None | Some(Some(true)) => {
+                    out.insert(name.to_string());
+                }
+                Some(Some(false)) => {
+                    out.remove(name);
+                }
+                Some(None) => {}
             }
+        }
+    }
+}
+
+/// Record each project's `researchCost`; later files override earlier ones, and
+/// entries without the field are left alone.
+fn collect_project_costs(path: &Path, out: &mut BTreeMap<String, f64>) {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let text = text.trim_start_matches('\u{feff}');
+    let Ok(serde_json::Value::Array(entries)) = json5::from_str::<serde_json::Value>(text) else {
+        return;
+    };
+    for entry in entries {
+        if let Some(name) = entry.get("dataName").and_then(|v| v.as_str())
+            && let Some(cost) = entry.get("researchCost").and_then(|v| v.as_f64())
+        {
+            out.insert(name.to_string(), cost);
         }
     }
 }
