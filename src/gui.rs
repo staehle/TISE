@@ -43,6 +43,48 @@ pub fn run_gui() -> eframe::Result {
     )
 }
 
+/// Wording for the chip-style template-name list editor.
+struct NameListLabels {
+    title: &'static str,
+    current: &'static str,
+    remove_hint: &'static str,
+    add: &'static str,
+    search_hint: &'static str,
+    no_game_data: &'static str,
+}
+
+const NAME_LIST_TRAITS: NameListLabels = NameListLabels {
+    title: statics::EN_TRAIT_EDITOR,
+    current: statics::EN_TRAIT_CURRENT,
+    remove_hint: statics::EN_TRAIT_EDITOR_REMOVE_HINT,
+    add: statics::EN_TRAIT_ADD,
+    search_hint: statics::EN_TRAIT_SEARCH_HINT,
+    no_game_data: statics::EN_TRAIT_NO_GAME_DATA,
+};
+
+const NAME_LIST_PROJECTS: NameListLabels = NameListLabels {
+    title: statics::EN_PROJECT_EDITOR,
+    current: statics::EN_PROJECT_CURRENT,
+    remove_hint: statics::EN_PROJECT_EDITOR_REMOVE_HINT,
+    add: statics::EN_PROJECT_ADD,
+    search_hint: statics::EN_PROJECT_SEARCH_HINT,
+    no_game_data: statics::EN_PROJECT_NO_GAME_DATA,
+};
+
+const NAME_LIST_AVAILABLE_PROJECTS: NameListLabels = NameListLabels {
+    title: statics::EN_AVAILABLE_PROJECT_EDITOR,
+    ..NAME_LIST_PROJECTS
+};
+
+const NAME_LIST_TECHS: NameListLabels = NameListLabels {
+    title: statics::EN_TECH_EDITOR,
+    current: statics::EN_TECH_CURRENT,
+    remove_hint: statics::EN_TECH_EDITOR_REMOVE_HINT,
+    add: statics::EN_TECH_ADD,
+    search_hint: statics::EN_TECH_SEARCH_HINT,
+    no_game_data: statics::EN_TECH_NO_GAME_DATA,
+};
+
 /// The main application state and GUI logic.
 /// Stores the LoadedSave (owned), UI state (selection, scroll), and editor buffers.
 #[derive(Default)]
@@ -3188,23 +3230,120 @@ impl TiseApp {
                                     ui.separator();
                                 }
 
-                                let trait_helper = prop == statics::TI_PROP_TRAIT_TEMPLATE_NAMES
-                                    && matches!(&staged, TiValue::Array(a)
-                                        if a.iter().all(|v| matches!(v, TiValue::String(_))));
-                                if trait_helper && let TiValue::Array(arr) = &mut staged {
+                                if prop == statics::TI_PROP_CURRENT_PROJECT_PROGRESS
+                                    && let TiValue::Array(arr) = &mut staged
+                                    && is_project_progress(arr)
+                                {
                                     let game_data = self.game_data_snapshot();
                                     let catalog = game_data
                                         .as_deref()
-                                        .map(|g| g.names(crate::gamedata::TEMPLATE_TRAITS))
+                                        .map(|g| g.names(crate::gamedata::TEMPLATE_PROJECTS))
+                                        .filter(|c| !c.is_empty());
+                                    let names_of = |key: &str| -> Vec<String> {
+                                        value_obj
+                                            .get(key)
+                                            .and_then(|v| match v {
+                                                TiValue::Array(a) => Some(
+                                                    a.iter()
+                                                        .filter_map(TiValue::as_str)
+                                                        .map(str::to_string)
+                                                        .collect(),
+                                                ),
+                                                _ => None,
+                                            })
+                                            .unwrap_or_default()
+                                    };
+                                    let flag = |key: &str| {
+                                        matches!(value_obj.get(key), Some(TiValue::Bool(true)))
+                                    };
+                                    let costs = game_data
+                                        .as_deref()
+                                        .map(|g| {
+                                            arr.iter()
+                                                .filter_map(|p| {
+                                                    let n = p
+                                                        .get(
+                                                            statics::TI_FIELD_PROJECT_TEMPLATE_NAME,
+                                                        )?
+                                                        .as_str()?;
+                                                    Some((n.to_string(), g.project_cost(n)?))
+                                                })
+                                                .collect()
+                                        })
+                                        .unwrap_or_default();
+                                    let faction = ProjectFactionInfo {
+                                        costs,
+                                        available: names_of(statics::TI_PROP_AVAILABLE_PROJECTS),
+                                        finished: names_of(statics::TI_PROP_FINISHED_PROJECTS),
+                                        org_slot: flag(statics::TI_PROP_ORG_SLOT_UNLOCKED),
+                                        hab_slot: flag(statics::TI_PROP_HAB_SLOT_UNLOCKED),
+                                        repeatable: game_data
+                                            .as_deref()
+                                            .map(|g| {
+                                                g.names(
+                                                    crate::gamedata::TEMPLATE_REPEATABLE_PROJECTS,
+                                                )
+                                                .to_vec()
+                                            })
+                                            .unwrap_or_default(),
+                                    };
+                                    let mut changed = false;
+                                    ui.group(|ui| {
+                                        ui.label(statics::EN_PROJECT_PROGRESS_EDITOR);
+                                        changed = Self::render_project_progress_editor(
+                                            ui,
+                                            arr,
+                                            catalog,
+                                            &faction,
+                                            &mut self.trait_add_filter,
+                                        );
+                                    });
+                                    if changed {
+                                        self.edit_buffer = staged.to_ti_save_pretty();
+                                        self.last_error = None;
+                                    }
+                                    ui.separator();
+                                }
+
+                                let name_list = match prop {
+                                    statics::TI_PROP_TRAIT_TEMPLATE_NAMES => {
+                                        Some((crate::gamedata::TEMPLATE_TRAITS, &NAME_LIST_TRAITS))
+                                    }
+                                    statics::TI_PROP_FINISHED_ONE_TIME_PROJECTS => Some((
+                                        crate::gamedata::TEMPLATE_ONE_TIME_PROJECTS,
+                                        &NAME_LIST_PROJECTS,
+                                    )),
+                                    statics::TI_PROP_AVAILABLE_PROJECTS => Some((
+                                        crate::gamedata::TEMPLATE_PROJECTS,
+                                        &NAME_LIST_AVAILABLE_PROJECTS,
+                                    )),
+                                    statics::TI_PROP_FINISHED_TECHS => {
+                                        Some((crate::gamedata::TEMPLATE_TECHS, &NAME_LIST_TECHS))
+                                    }
+                                    _ => None,
+                                }
+                                .filter(|_| {
+                                    matches!(&staged, TiValue::Array(a)
+                                        if a.iter().all(|v| matches!(v, TiValue::String(_))))
+                                });
+                                let trait_helper = name_list.is_some();
+                                if let Some((template, labels)) = name_list
+                                    && let TiValue::Array(arr) = &mut staged
+                                {
+                                    let game_data = self.game_data_snapshot();
+                                    let catalog = game_data
+                                        .as_deref()
+                                        .map(|g| g.names(template))
                                         .filter(|c| !c.is_empty());
                                     let mut changed = false;
                                     ui.group(|ui| {
-                                        ui.label(statics::EN_TRAIT_EDITOR);
+                                        ui.label(labels.title);
                                         changed = Self::render_trait_editor(
                                             ui,
                                             arr,
                                             catalog,
                                             &mut self.trait_add_filter,
+                                            labels,
                                         );
                                     });
                                     if changed {
@@ -3384,6 +3523,230 @@ impl TiseApp {
                 });
             });
         changed_any
+    }
+
+    /// One card per in-progress project: editable accumulated research, slot and
+    /// completed flag, plus a remove button and an "add project" picker.
+    fn render_project_progress_editor(
+        ui: &mut egui::Ui,
+        projects: &mut Vec<TiValue>,
+        catalog: Option<&[String]>,
+        faction: &ProjectFactionInfo,
+        filter: &mut String,
+    ) -> bool {
+        use crate::value::TiNumber;
+
+        let mut changed = false;
+        let mut remove: Option<usize> = None;
+
+        if projects.is_empty() {
+            ui.weak(statics::EN_PROJECT_PROGRESS_EMPTY);
+        }
+        egui::ScrollArea::horizontal()
+            .id_salt("project_progress_scroll")
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    for (idx, project) in projects.iter_mut().enumerate() {
+                        let Some(map) = project.as_object_mut() else {
+                            continue;
+                        };
+                        let name = map
+                            .get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)
+                            .and_then(TiValue::as_str)
+                            .unwrap_or(statics::EN_EMPTY)
+                            .to_string();
+                        let bad_slot = matches!(
+                            map.get(statics::TI_FIELD_SLOT),
+                            Some(TiValue::Number(n)) if n.as_i64().is_some_and(|s| s < 3)
+                        );
+                        let cost = faction.costs.get(&name).copied();
+                        // Times a repeatable project was already finished.
+                        let repeat_count = if faction.repeatable.contains(&name) {
+                            faction.finished.iter().filter(|n| **n == name).count()
+                        } else {
+                            0
+                        };
+                        let finished =
+                            faction.finished.contains(&name) && !faction.repeatable.contains(&name);
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                ui.strong(name);
+                                if bad_slot {
+                                    ui.colored_label(
+                                        ui.visuals().warn_fg_color,
+                                        statics::EN_PROJECT_WARN_BAD_SLOT,
+                                    );
+                                }
+                                if finished {
+                                    ui.colored_label(
+                                        ui.visuals().warn_fg_color,
+                                        statics::EN_PROJECT_WARN_FINISHED,
+                                    );
+                                }
+                                if let Some(TiValue::Number(n)) =
+                                    map.get_mut(statics::TI_FIELD_ACCUMULATED_RESEARCH)
+                                {
+                                    ui.horizontal(|ui| {
+                                        ui.label(statics::EN_LABEL_ACCUMULATED_RESEARCH);
+                                        changed |= Self::edit_number(ui, n);
+                                    });
+                                }
+                                match cost {
+                                    Some(c) if c >= 0.0 => {
+                                        if repeat_count > 0 {
+                                            // Repeatable cost grows by the base cost per completion.
+                                            ui.label(format!(
+                                                "{} {} (base {c} x {}, researched {repeat_count}x)",
+                                                statics::EN_LABEL_RESEARCH_COST,
+                                                c * (1 + repeat_count) as f64,
+                                                1 + repeat_count,
+                                            ));
+                                        } else {
+                                            ui.label(format!(
+                                                "{} {c}",
+                                                statics::EN_LABEL_RESEARCH_COST
+                                            ));
+                                        }
+                                    }
+                                    Some(_) => {
+                                        ui.weak(statics::EN_PROJECT_COST_NOT_RESEARCHABLE);
+                                    }
+                                    None => {
+                                        ui.weak(statics::EN_PROJECT_COST_UNKNOWN);
+                                    }
+                                }
+                                if let Some(TiValue::Number(n)) =
+                                    map.get_mut(statics::TI_FIELD_SLOT)
+                                {
+                                    ui.horizontal(|ui| {
+                                        ui.label(statics::EN_LABEL_SLOT);
+                                        changed |= Self::edit_number(ui, n);
+                                    });
+                                }
+                                if ui.button(statics::EN_BTN_REMOVE).clicked() {
+                                    remove = Some(idx);
+                                }
+                            });
+                        });
+                    }
+                });
+            });
+
+        ui.separator();
+        ui.strong(statics::EN_PROJECT_PROGRESS_ADD);
+        ui.add(
+            egui::TextEdit::singleline(filter)
+                .hint_text(statics::EN_PROJECT_PROGRESS_SEARCH_HINT)
+                .desired_width(f32::INFINITY),
+        );
+
+        let in_use: Vec<&str> = projects
+            .iter()
+            .filter_map(|p| {
+                p.get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)
+                    .and_then(TiValue::as_str)
+            })
+            .collect();
+        let needle = filter.trim().to_lowercase();
+        let mut add: Option<String> = None;
+
+        let used_slots: Vec<i64> = projects
+            .iter()
+            .filter_map(|p| match p.get(statics::TI_FIELD_SLOT) {
+                Some(TiValue::Number(n)) => n.as_i64(),
+                _ => None,
+            })
+            .collect();
+        let next_slot = faction.next_free_slot(&used_slots);
+        if next_slot.is_none() {
+            ui.colored_label(ui.visuals().warn_fg_color, statics::EN_PROJECT_WARN_NO_SLOT);
+        }
+
+        // Only offer projects the faction can actually research; fall back to
+        // the full catalogue when the faction has no available list.
+        let offered: Option<&[String]> = if faction.available.is_empty() {
+            catalog
+        } else {
+            Some(&faction.available)
+        };
+
+        if let Some(catalog) = offered {
+            egui::ScrollArea::vertical()
+                .id_salt("project_progress_picker")
+                .min_scrolled_height(140.0)
+                .max_height(140.0)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    for name in catalog
+                        .iter()
+                        .filter(|n| faction.repeatable.contains(n) || !in_use.contains(&n.as_str()))
+                        .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
+                    {
+                        let row = egui::Button::new(format!("+  {name}"))
+                            .frame(false)
+                            .min_size(egui::vec2(ui.available_width(), 0.0));
+                        if ui.add_enabled(next_slot.is_some(), row).clicked() {
+                            add = Some(name.clone());
+                        }
+                    }
+                });
+        } else {
+            ui.weak(statics::EN_PROJECT_NO_GAME_DATA);
+        }
+
+        let typed = filter.trim();
+        if !typed.is_empty()
+            && (faction.repeatable.iter().any(|n| n == typed) || !in_use.contains(&typed))
+            && !offered.is_some_and(|c| c.iter().any(|n| n == typed))
+        {
+            if faction.finished.iter().any(|n| n == typed)
+                && !faction.repeatable.iter().any(|n| n == typed)
+            {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    statics::EN_PROJECT_WARN_FINISHED_TYPED,
+                );
+            }
+            if ui
+                .add_enabled(
+                    next_slot.is_some(),
+                    egui::Button::new(format!("{} {}", statics::EN_TRAIT_ADD_TYPED, typed)),
+                )
+                .clicked()
+            {
+                add = Some(typed.to_string());
+            }
+        }
+
+        if let Some(i) = remove {
+            projects.remove(i);
+            changed = true;
+        }
+
+        if let (Some(name), Some(slot)) = (add, next_slot) {
+            let mut entry = indexmap::IndexMap::new();
+            entry.insert(
+                statics::TI_FIELD_PROJECT_TEMPLATE_NAME.to_string(),
+                TiValue::String(name),
+            );
+            entry.insert(
+                statics::TI_FIELD_ACCUMULATED_RESEARCH.to_string(),
+                TiValue::Number(TiNumber::F64(0.0)),
+            );
+            entry.insert(
+                statics::TI_FIELD_SLOT.to_string(),
+                TiValue::Number(TiNumber::I64(slot)),
+            );
+            entry.insert(
+                statics::TI_FIELD_COMPLETED.to_string(),
+                TiValue::Bool(false),
+            );
+            projects.push(TiValue::Object(entry));
+            filter.clear();
+            changed = true;
+        }
+
+        changed
     }
 
     fn render_ref_list_table(
@@ -3630,6 +3993,53 @@ fn is_tech_progress(items: &[TiValue]) -> bool {
         })
 }
 
+/// Matches the `currentProjectProgress` shape: objects with a project name,
+/// numeric accumulated research and slot, and a completed flag. May be empty.
+/// Faction fields that decide which projects and slots are valid.
+struct ProjectFactionInfo {
+    available: Vec<String>,
+    finished: Vec<String>,
+    org_slot: bool,
+    hab_slot: bool,
+    /// Projects that may be in progress several times and re-finished.
+    repeatable: Vec<String>,
+    /// Template `researchCost` for the projects currently in progress.
+    costs: std::collections::HashMap<String, f64>,
+}
+
+impl ProjectFactionInfo {
+    /// First free slot in 3, 4 (org unlocked), 5 (hab unlocked), then 6+.
+    /// Slots 0-2 are ignored by the game. We don't know how many 6+ slots a
+    /// faction has, so 6 is always allowed (the game uses it when 4/5 are
+    /// locked) and 7+ only when a higher slot is already in use.
+    fn next_free_slot(&self, used: &[i64]) -> Option<i64> {
+        let low = [(3, true), (4, self.org_slot), (5, self.hab_slot)];
+        if let Some((s, _)) = low.iter().find(|(s, ok)| *ok && !used.contains(s)) {
+            return Some(*s);
+        }
+        let max_used = used.iter().copied().max().unwrap_or(0);
+        (6..)
+            .find(|s| !used.contains(s))
+            .filter(|s| *s <= 6 || *s < max_used)
+    }
+}
+
+fn is_project_progress(items: &[TiValue]) -> bool {
+    items.iter().all(|item| {
+        item.get(statics::TI_FIELD_PROJECT_TEMPLATE_NAME)
+            .is_some_and(|v| v.as_str().is_some())
+            && matches!(
+                item.get(statics::TI_FIELD_ACCUMULATED_RESEARCH),
+                Some(TiValue::Number(_))
+            )
+            && matches!(item.get(statics::TI_FIELD_SLOT), Some(TiValue::Number(_)))
+            && matches!(
+                item.get(statics::TI_FIELD_COMPLETED),
+                Some(TiValue::Bool(_))
+            )
+    })
+}
+
 fn array_of_key_value_refs(val: &TiValue) -> Option<Vec<(i64, String)>> {
     let TiValue::Array(items) = val else {
         return None;
@@ -3846,6 +4256,7 @@ impl TiseApp {
         arr: &mut Vec<TiValue>,
         catalog: Option<&[String]>,
         filter: &mut String,
+        labels: &NameListLabels,
     ) -> bool {
         let mut changed = false;
         let current: Vec<String> = arr
@@ -3860,8 +4271,8 @@ impl TiseApp {
         // Two side-by-side panes: what the councillor has, and what can be added.
         ui.columns(2, |cols| {
             cols[0].group(|ui| {
-                ui.strong(format!("{} ({})", statics::EN_TRAIT_CURRENT, current.len()));
-                ui.weak(statics::EN_TRAIT_EDITOR_REMOVE_HINT);
+                ui.strong(format!("{} ({})", labels.current, current.len()));
+                ui.weak(labels.remove_hint);
                 ui.separator();
                 egui::ScrollArea::vertical()
                     .id_salt("trait_current")
@@ -3895,10 +4306,10 @@ impl TiseApp {
             });
 
             cols[1].group(|ui| {
-                ui.strong(statics::EN_TRAIT_ADD);
+                ui.strong(labels.add);
                 ui.add(
                     egui::TextEdit::singleline(filter)
-                        .hint_text(statics::EN_TRAIT_SEARCH_HINT)
+                        .hint_text(labels.search_hint)
                         .desired_width(f32::INFINITY),
                 );
                 ui.separator();
@@ -3925,7 +4336,7 @@ impl TiseApp {
                             }
                         });
                 } else {
-                    ui.weak(statics::EN_TRAIT_NO_GAME_DATA);
+                    ui.weak(labels.no_game_data);
                 }
 
                 let typed = filter.trim();

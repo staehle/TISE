@@ -9,6 +9,9 @@ Action by @lin0287:
 - Game folder setting: on first launch TISE asks for your Terra Invicta install folder (auto-detects Steam installs), remembers it in a config file, and reads base-game and enabled-mod templates from it
 - Councilor traits editor: click traits to remove them, search the game trait list to add them, with warnings for unknown or duplicate names
 - Groups panel is now grouped into collapsible categories (Factions & People, Earth, Space, Facilities, Missions & Events, AI Goals, Global System, Other) instead of one long flat list
+- Project progress editor: new projects go into the first free valid slot (3, then 4/5 if the org/hab slot is unlocked, then 6+; slots 0-2 are ignored by the game), the picker only offers the faction's available projects, and cards warn about entries in slots below 3 or for already-finished projects
+- Project progress editor: removed the misleading "Completed" checkbox, and each card shows the project's research cost from the game templates (repeatable projects scale as base cost x (1 + times finished)); repeatable projects can be added multiple times without warnings
+- Game data: the one-time project list no longer drops projects when a mod override omits `oneTimeGlobally`
 - Singleton groups (TIMetadataState, TITimeState, TIGlobalResearchState, TIGlobalValuesState) auto-select their only object and skip the Objects panel; other groups with a single object still show it
 
 # 2.2.0
