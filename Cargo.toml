@@ -1,12 +1,12 @@
 [package]
 name = "tise"
 description = "TISE: Terra Invicta Save Editor"
-authors = ["Jake Staehle <jacob@staehle.us>"]
+authors = ["Jake Staehle <jacob@staehle.us>", "Tom Lin <tom5023@live.com.au>"]
 homepage = "https://github.com/staehle/tise"
 repository = "https://github.com/staehle/tise"
 license-file = "LICENSE"
 categories = ["games"]
-version = "2.2.0"
+version = "2.3.1"
 edition = "2024"
 
 [lib]
@@ -16,15 +16,31 @@ path = "src/lib.rs"
 # Ergonomic error handling for IO/parse/GUI glue.
 anyhow = "1.0"
 # Cross-platform native GUI shell for egui.
-eframe = "0.33"
+# eframe 0.36 made wgpu the default renderer; we keep its other defaults but stay on
+# glow (OpenGL), which is lighter (~7 MB smaller binary) and what TISE has always shipped.
+# When bumping eframe, re-check its `default` feature list: with defaults off, new ones
+# (e.g. `clipboard` in 0.37) are silently dropped. `system_fonts` is left off on purpose.
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "default_fonts",
+    "glow",
+    "links",
+    "wayland",
+    "web_screen_reader",
+    "x11",
+] }
 # Optional egui widgets/utilities (tables, etc.).
-egui_extras = "0.33"
+egui_extras = "0.37"
 # Gzip read/write for `.gz` save files.
 flate2 = "1.0"
 # JSON object map preserving insertion order (important for stable structure/editing).
-indexmap = { version = "2.13", features = ["serde"] }
+indexmap = { version = "2.14", features = ["serde"] }
 # JSON5 parser (supports `Infinity`, comments, trailing commas, etc.).
-json5 = "1.3"
+# At least 1.3.6: 1.3.4 made float-heavy saves load in quadratic time (multi-MB saves
+# effectively hang); fixed in 1.3.5/1.3.6. `cargo test --test diff_paths` catches a regression.
+# Upstream: https://github.com/callum-oakley/json5-rs/issues/62
+json5 = "1.3.6"
 # Native file open/save dialogs.
 rfd = "0.17"
 # Fast float-to-string for deterministic JSON number formatting.
@@ -37,6 +53,16 @@ thiserror = "2.0"
 ureq = { version = "3", features = ["json"] }
 # JSON parsing for the GitHub releases API response.
 serde_json = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+# Reads GOG's install registry keys for game-folder auto-detection.
+windows-registry = "0.100"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Not used directly: restores winit's default features (Wayland dlopen + client-side
+# decorations), which eframe only enables through its own `default` feature set.
+# Keep in step with the winit version eframe depends on.
+winit = "0.30"
 
 [dev-dependencies]
 # Nicer diffs for byte-for-byte roundtrip assertion failures.
