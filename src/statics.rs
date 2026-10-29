@@ -347,6 +347,7 @@ pub const EN_TRAIT_ADD_TYPED: &str = "Add as typed:";
 // Finished one-time-only projects helper.
 pub const EN_PROJECT_EDITOR: &str = "Finished one-time projects";
 pub const EN_AVAILABLE_PROJECT_EDITOR: &str = "Available projects";
+pub const EN_FINISHED_PROJECT_EDITOR: &str = "Finished projects";
 pub const EN_PROJECT_CURRENT: &str = "Current projects";
 pub const EN_PROJECT_EDITOR_REMOVE_HINT: &str = "Click a project to remove it.";
 pub const EN_PROJECT_ADD: &str = "Add project";

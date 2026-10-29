@@ -76,6 +76,11 @@ const NAME_LIST_AVAILABLE_PROJECTS: NameListLabels = NameListLabels {
     ..NAME_LIST_PROJECTS
 };
 
+const NAME_LIST_FINISHED_PROJECTS: NameListLabels = NameListLabels {
+    title: statics::EN_FINISHED_PROJECT_EDITOR,
+    ..NAME_LIST_PROJECTS
+};
+
 const NAME_LIST_TECHS: NameListLabels = NameListLabels {
     title: statics::EN_TECH_EDITOR,
     current: statics::EN_TECH_CURRENT,
@@ -3317,6 +3322,10 @@ impl TiseApp {
                                         crate::gamedata::TEMPLATE_PROJECTS,
                                         &NAME_LIST_AVAILABLE_PROJECTS,
                                     )),
+                                    statics::TI_PROP_FINISHED_PROJECTS => Some((
+                                        crate::gamedata::TEMPLATE_PROJECTS,
+                                        &NAME_LIST_FINISHED_PROJECTS,
+                                    )),
                                     statics::TI_PROP_FINISHED_TECHS => {
                                         Some((crate::gamedata::TEMPLATE_TECHS, &NAME_LIST_TECHS))
                                     }
@@ -3335,6 +3344,23 @@ impl TiseApp {
                                         .as_deref()
                                         .map(|g| g.names(template))
                                         .filter(|c| !c.is_empty());
+                                    // Repeatable projects get one finished entry per
+                                    // completion, so duplicates are legitimate there.
+                                    let repeatable: &[String] = if prop
+                                        == statics::TI_PROP_FINISHED_PROJECTS
+                                    {
+                                        game_data
+                                            .as_deref()
+                                            .map(|g| {
+                                                g.names(
+                                                    crate::gamedata::TEMPLATE_REPEATABLE_PROJECTS,
+                                                )
+                                            })
+                                            .unwrap_or_default()
+                                    } else {
+                                        &[]
+                                    };
+                                    let repeats_ok = |n: &str| repeatable.iter().any(|r| r == n);
                                     let mut changed = false;
                                     ui.group(|ui| {
                                         ui.label(labels.title);
@@ -3344,6 +3370,7 @@ impl TiseApp {
                                             catalog,
                                             &mut self.trait_add_filter,
                                             labels,
+                                            &repeats_ok,
                                         );
                                     });
                                     if changed {
@@ -4257,6 +4284,7 @@ impl TiseApp {
         catalog: Option<&[String]>,
         filter: &mut String,
         labels: &NameListLabels,
+        repeats_ok: &dyn Fn(&str) -> bool,
     ) -> bool {
         let mut changed = false;
         let current: Vec<String> = arr
@@ -4282,7 +4310,7 @@ impl TiseApp {
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             for (i, name) in current.iter().enumerate() {
-                                let duplicate = current[..i].contains(name);
+                                let duplicate = current[..i].contains(name) && !repeats_ok(name);
                                 let unknown = catalog.is_some_and(|c| !c.contains(name));
                                 let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
                                 let mut tip = None;
@@ -4324,7 +4352,7 @@ impl TiseApp {
                         .show(ui, |ui| {
                             for name in catalog
                                 .iter()
-                                .filter(|n| !current.contains(n))
+                                .filter(|n| !current.contains(n) || repeats_ok(n))
                                 .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
                             {
                                 let row = egui::Button::new(format!("+  {name}"))
