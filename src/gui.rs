@@ -3354,20 +3354,19 @@ impl TiseApp {
                                         .filter(|c| !c.is_empty());
                                     // Repeatable projects get one finished entry per
                                     // completion, so duplicates are legitimate there.
-                                    let repeatable: &[String] = if prop
-                                        == statics::TI_PROP_FINISHED_PROJECTS
-                                    {
-                                        game_data
-                                            .as_deref()
-                                            .map(|g| {
-                                                g.names(
+                                    let repeatable: &[String] =
+                                        if prop == statics::TI_PROP_FINISHED_PROJECTS {
+                                            game_data
+                                                .as_deref()
+                                                .map(|g| {
+                                                    g.names(
                                                     crate::gamedata::TEMPLATE_REPEATABLE_PROJECTS,
                                                 )
-                                            })
-                                            .unwrap_or_default()
-                                    } else {
-                                        &[]
-                                    };
+                                                })
+                                                .unwrap_or_default()
+                                        } else {
+                                            &[]
+                                        };
                                     let repeats_ok = |n: &str| repeatable.iter().any(|r| r == n);
                                     let mut changed = false;
                                     ui.group(|ui| {
@@ -4448,7 +4447,7 @@ impl TiseApp {
             }
         });
         if !apply {
-            self.finished_projects_draft = (staged != *arr).then(|| (faction_id, staged));
+            self.finished_projects_draft = (staged != *arr).then_some((faction_id, staged));
             return;
         }
         self.finished_projects_draft = None;
