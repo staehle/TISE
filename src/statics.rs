@@ -356,6 +356,8 @@ pub const EN_PROJECT_CURRENT: &str = "Current projects";
 pub const EN_PROJECT_EDITOR_REMOVE_HINT: &str = "Click a project to remove it.";
 pub const EN_PROJECT_ADD: &str = "Add project";
 pub const EN_PROJECT_SEARCH_HINT: &str = "Search projects to add...";
+pub const EN_BTN_REVERT: &str = "Revert";
+pub const EN_PROJECT_UNAPPLIED: &str = "Unapplied changes";
 pub const EN_PROJECT_REPEATABLE: &str = "Repeatable projects completed";
 pub const EN_PROJECT_REPEATABLE_HINT: &str =
     "How many times each repeatable project has been completed.";

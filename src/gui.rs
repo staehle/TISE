@@ -51,6 +51,8 @@ struct NameListLabels {
     add: &'static str,
     search_hint: &'static str,
     no_game_data: &'static str,
+    /// Leave repeatable entries out of the current list (shown elsewhere).
+    hide_repeatable: bool,
 }
 
 const NAME_LIST_TRAITS: NameListLabels = NameListLabels {
@@ -60,6 +62,7 @@ const NAME_LIST_TRAITS: NameListLabels = NameListLabels {
     add: statics::EN_TRAIT_ADD,
     search_hint: statics::EN_TRAIT_SEARCH_HINT,
     no_game_data: statics::EN_TRAIT_NO_GAME_DATA,
+    hide_repeatable: false,
 };
 
 const NAME_LIST_PROJECTS: NameListLabels = NameListLabels {
@@ -69,6 +72,7 @@ const NAME_LIST_PROJECTS: NameListLabels = NameListLabels {
     add: statics::EN_PROJECT_ADD,
     search_hint: statics::EN_PROJECT_SEARCH_HINT,
     no_game_data: statics::EN_PROJECT_NO_GAME_DATA,
+    hide_repeatable: false,
 };
 
 const NAME_LIST_AVAILABLE_PROJECTS: NameListLabels = NameListLabels {
@@ -78,6 +82,7 @@ const NAME_LIST_AVAILABLE_PROJECTS: NameListLabels = NameListLabels {
 
 const NAME_LIST_FINISHED_PROJECTS: NameListLabels = NameListLabels {
     title: statics::EN_FINISHED_PROJECT_EDITOR,
+    hide_repeatable: true,
     ..NAME_LIST_PROJECTS
 };
 
@@ -88,6 +93,7 @@ const NAME_LIST_TECHS: NameListLabels = NameListLabels {
     add: statics::EN_TECH_ADD,
     search_hint: statics::EN_TECH_SEARCH_HINT,
     no_game_data: statics::EN_TECH_NO_GAME_DATA,
+    hide_repeatable: false,
 };
 
 /// The main application state and GUI logic.
@@ -212,6 +218,8 @@ struct TiseApp {
     game_dir_error: Option<String>,
     /// Search text for the councillor trait picker.
     trait_add_filter: String,
+    /// Unapplied edits to one faction's finished projects (faction id, staged list).
+    finished_projects_draft: Option<(i64, Vec<TiValue>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -4331,7 +4339,11 @@ impl TiseApp {
             ui.label(statics::EN_FINISHED_PROJECTS_MISSING);
             return;
         }
-        let mut staged = arr.clone();
+        // Edits stay in a draft until Apply is clicked.
+        let mut staged = match &self.finished_projects_draft {
+            Some((id, draft)) if *id == faction_id => draft.clone(),
+            _ => arr.clone(),
+        };
 
         let game_data = self.game_data_snapshot();
         let catalog = game_data
@@ -4346,8 +4358,8 @@ impl TiseApp {
 
         // Fill the rest of the window; leave room for the group frames.
         let summary_height = 130.0;
-        let pane_height = (ui.available_height() - 24.0 - summary_height).max(200.0);
-        let changed = Self::render_trait_editor(
+        let pane_height = (ui.available_height() - 24.0 - summary_height - 32.0).max(200.0);
+        Self::render_trait_editor(
             ui,
             &mut staged,
             catalog,
@@ -4358,16 +4370,17 @@ impl TiseApp {
         );
 
         // Times each repeatable project was completed, in order of first appearance.
-        let mut repeat_counts: Vec<(&str, usize)> = Vec::new();
+        let mut repeat_counts: Vec<(String, usize)> = Vec::new();
         for name in staged.iter().filter_map(TiValue::as_str) {
             if !repeats_ok(name) {
                 continue;
             }
-            match repeat_counts.iter_mut().find(|(n, _)| *n == name) {
+            match repeat_counts.iter_mut().find(|(n, _)| n == name) {
                 Some((_, count)) => *count += 1,
-                None => repeat_counts.push((name, 1)),
+                None => repeat_counts.push((name.to_string(), 1)),
             }
         }
+        let mut count_edits: Vec<(String, usize, usize)> = Vec::new();
         ui.group(|ui| {
             ui.set_width(ui.available_width());
             ui.strong(format!(
@@ -4390,16 +4403,55 @@ impl TiseApp {
                         .spacing([16.0, 2.0])
                         .show(ui, |ui| {
                             for (name, count) in &repeat_counts {
-                                ui.label(*name);
-                                ui.label(count.to_string());
+                                ui.label(name);
+                                // Minimum 1: use the list above to remove a project outright.
+                                let mut edited = *count;
+                                if ui
+                                    .add(egui::DragValue::new(&mut edited).range(1..=9999))
+                                    .changed()
+                                    && edited != *count
+                                {
+                                    count_edits.push((name.clone(), *count, edited));
+                                }
                                 ui.end_row();
                             }
                         });
                 });
         });
-        if !changed {
+        for (name, old, new) in count_edits {
+            if new > old {
+                staged.extend((old..new).map(|_| TiValue::String(name.clone())));
+            } else {
+                // Drop the surplus entries from the end of the list.
+                for _ in new..old {
+                    if let Some(pos) = staged.iter().rposition(|v| v.as_str() == Some(&name)) {
+                        staged.remove(pos);
+                    }
+                }
+            }
+        }
+
+        let dirty = staged != *arr;
+        let mut apply = false;
+        ui.horizontal(|ui| {
+            apply = ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_APPLY))
+                .clicked();
+            if ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_REVERT))
+                .clicked()
+            {
+                staged = arr.clone();
+            }
+            if dirty {
+                ui.weak(statics::EN_PROJECT_UNAPPLIED);
+            }
+        });
+        if !apply {
+            self.finished_projects_draft = (staged != *arr).then(|| (faction_id, staged));
             return;
         }
+        self.finished_projects_draft = None;
 
         let after = TiValue::Array(staged);
         let Some(obj) = save.get_object_value_mut(faction_group, faction_id) else {
@@ -4455,7 +4507,11 @@ impl TiseApp {
         // Two side-by-side panes: what the councillor has, and what can be added.
         ui.columns(2, |cols| {
             cols[0].group(|ui| {
-                ui.strong(format!("{} ({})", labels.current, current.len()));
+                let shown = current
+                    .iter()
+                    .filter(|n| !(labels.hide_repeatable && repeats_ok(n)))
+                    .count();
+                ui.strong(format!("{} ({})", labels.current, shown));
                 ui.weak(labels.remove_hint);
                 ui.separator();
                 egui::ScrollArea::vertical()
@@ -4466,6 +4522,9 @@ impl TiseApp {
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             for (i, name) in current.iter().enumerate() {
+                                if labels.hide_repeatable && repeats_ok(name) {
+                                    continue;
+                                }
                                 let duplicate = current[..i].contains(name) && !repeats_ok(name);
                                 let unknown = catalog.is_some_and(|c| !c.contains(name));
                                 let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
@@ -5788,7 +5847,14 @@ impl eframe::App for TiseApp {
             });
             ui.separator();
 
-            let mut properties: Vec<_> = value_obj.iter().collect();
+            // Faction finished projects are edited in the virtual Finished Projects group.
+            let mut properties: Vec<_> = value_obj
+                .iter()
+                .filter(|(k, _)| {
+                    !(group == statics::TI_GROUP_FACTION_STATE
+                        && k.as_str() == statics::TI_PROP_FINISHED_PROJECTS)
+                })
+                .collect();
             properties.sort_by_key(|(k, _)| (*k).to_lowercase());
 
             // Movable horizontal split between Properties (top) and Edit (bottom).
