@@ -4285,6 +4285,13 @@ impl TiseApp {
     ) {
         let faction_group = statics::TI_GROUP_FACTION_STATE;
         let prop = statics::TI_PROP_FINISHED_PROJECTS;
+        let mut factions: Vec<(i64, String)> = save
+            .index
+            .objects_by_group
+            .get(statics::TI_GROUP_FACTION_STATE)
+            .map(|v| v.iter().map(|o| (o.id, o.display_name.clone())).collect())
+            .unwrap_or_default();
+        factions.sort_by_key(|(_, n)| n.to_lowercase());
         let faction_name = save
             .index
             .id_to_display_name
@@ -4292,14 +4299,25 @@ impl TiseApp {
             .cloned()
             .unwrap_or_default();
 
+        let mut picked = faction_id;
         ui.horizontal(|ui| {
             ui.heading(statics::GROUP_FINISHED_PROJECTS);
             ui.separator();
-            ui.label(faction_name);
+            egui::ComboBox::from_id_salt("finished_projects_faction")
+                .selected_text(faction_name)
+                .show_ui(ui, |ui| {
+                    for (id, name) in &factions {
+                        ui.selectable_value(&mut picked, *id, name);
+                    }
+                });
             ui.separator();
             ui.label(format!("ID {faction_id}"));
         });
         ui.separator();
+        if picked != faction_id {
+            self.select_object_user(statics::GROUP_FINISHED_PROJECTS, picked);
+            return;
+        }
 
         let before = save
             .get_object_value(faction_group, faction_id)
@@ -5391,7 +5409,11 @@ impl eframe::App for TiseApp {
             self.select_object_internal(group, *id, false, false, false);
         }
 
-        if singleton_object.is_none() {
+        // Finished Projects picks its faction from the top bar instead.
+        let finished_projects_selected =
+            self.selected_group.as_deref() == Some(statics::GROUP_FINISHED_PROJECTS);
+
+        if singleton_object.is_none() && !finished_projects_selected {
             egui::Panel::left("objects_panel")
                 .resizable(true)
                 .default_size(360.0)
@@ -5557,14 +5579,8 @@ impl eframe::App for TiseApp {
                         ui.separator();
                     }
 
-                    // The virtual finished-projects group lists the factions.
-                    let objects_key = if group == statics::GROUP_FINISHED_PROJECTS {
-                        statics::TI_GROUP_FACTION_STATE
-                    } else {
-                        group.as_str()
-                    };
                     let mut objects: Vec<_> = objects_by_group
-                        .get(objects_key)
+                        .get(group.as_str())
                         .map(|v| v.iter().collect())
                         .unwrap_or_default();
 
@@ -5691,6 +5707,18 @@ impl eframe::App for TiseApp {
                 ui.label(statics::EN_SELECT_GROUP_LEFT);
                 return;
             };
+            if group == statics::GROUP_FINISHED_PROJECTS && self.selected_object_id.is_none() {
+                // No object list for this group: start on the first faction by name.
+                let first = save
+                    .index
+                    .objects_by_group
+                    .get(statics::TI_GROUP_FACTION_STATE)
+                    .and_then(|v| v.iter().min_by_key(|o| o.display_name.to_lowercase()))
+                    .map(|o| o.id);
+                if let Some(id) = first {
+                    self.select_object_user(&group, id);
+                }
+            }
             let Some(object_id) = self.selected_object_id else {
                 ui.label(statics::EN_SELECT_OBJECT);
                 return;
