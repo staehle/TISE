@@ -3371,6 +3371,7 @@ impl TiseApp {
                                             &mut self.trait_add_filter,
                                             labels,
                                             &repeats_ok,
+                                            260.0,
                                         );
                                     });
                                     if changed {
@@ -4274,6 +4275,99 @@ impl TiseApp {
         }
     }
 
+    /// Right-hand view of the virtual "Finished Projects" group: edits one faction's
+    /// `finishedProjectNames`, recording the change as an edit of the faction itself.
+    fn render_finished_projects_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        save: &mut LoadedSave,
+        faction_id: i64,
+    ) {
+        let faction_group = statics::TI_GROUP_FACTION_STATE;
+        let prop = statics::TI_PROP_FINISHED_PROJECTS;
+        let faction_name = save
+            .index
+            .id_to_display_name
+            .get(&faction_id)
+            .cloned()
+            .unwrap_or_default();
+
+        ui.horizontal(|ui| {
+            ui.heading(statics::GROUP_FINISHED_PROJECTS);
+            ui.separator();
+            ui.label(faction_name);
+            ui.separator();
+            ui.label(format!("ID {faction_id}"));
+        });
+        ui.separator();
+
+        let before = save
+            .get_object_value(faction_group, faction_id)
+            .and_then(|o| o.get(prop))
+            .cloned();
+        let Some(TiValue::Array(arr)) = &before else {
+            ui.label(statics::EN_FINISHED_PROJECTS_MISSING);
+            return;
+        };
+        if !arr.iter().all(|v| matches!(v, TiValue::String(_))) {
+            ui.label(statics::EN_FINISHED_PROJECTS_MISSING);
+            return;
+        }
+        let mut staged = arr.clone();
+
+        let game_data = self.game_data_snapshot();
+        let catalog = game_data
+            .as_deref()
+            .map(|g| g.names(crate::gamedata::TEMPLATE_PROJECTS))
+            .filter(|c| !c.is_empty());
+        let repeatable: &[String] = game_data
+            .as_deref()
+            .map(|g| g.names(crate::gamedata::TEMPLATE_REPEATABLE_PROJECTS))
+            .unwrap_or_default();
+        let repeats_ok = |n: &str| repeatable.iter().any(|r| r == n);
+
+        // Fill the rest of the window; leave room for the group frames.
+        let pane_height = (ui.available_height() - 24.0).max(200.0);
+        let changed = Self::render_trait_editor(
+            ui,
+            &mut staged,
+            catalog,
+            &mut self.trait_add_filter,
+            &NAME_LIST_FINISHED_PROJECTS,
+            &repeats_ok,
+            pane_height,
+        );
+        if !changed {
+            return;
+        }
+
+        let after = TiValue::Array(staged);
+        let Some(obj) = save.get_object_value_mut(faction_group, faction_id) else {
+            self.last_error = Some(statics::EN_ERR_LOCATE_SELECTED_OBJECT.to_string());
+            return;
+        };
+        obj.insert(prop.to_string(), after.clone());
+        save.rebuild_index();
+        save.refresh_dirty();
+
+        let desc = format!(
+            "{} {}: {}",
+            statics::EN_SORT_ID,
+            faction_id,
+            Self::describe_change(prop, before.as_ref(), Some(&after))
+        );
+        self.record_action(EditAction {
+            group: faction_group.to_string(),
+            object_id: faction_id,
+            prop: prop.to_string(),
+            before,
+            after: Some(after),
+            description: desc.clone(),
+        });
+        self.status = desc;
+        self.last_error = None;
+    }
+
     /// Chip-style editor for `traitTemplateNames`: click a trait to remove it,
     /// search the game's trait list to add one. `catalog` is `None` when no game
     /// folder is configured; free-text add still works then. Returns true if
@@ -4285,6 +4379,7 @@ impl TiseApp {
         filter: &mut String,
         labels: &NameListLabels,
         repeats_ok: &dyn Fn(&str) -> bool,
+        pane_height: f32,
     ) -> bool {
         let mut changed = false;
         let current: Vec<String> = arr
@@ -4292,7 +4387,8 @@ impl TiseApp {
             .filter_map(|v| v.as_str().map(str::to_string))
             .collect();
 
-        const PANE_HEIGHT: f32 = 200.0;
+        // Scroll areas sit below a ~3-line header inside the group.
+        let list_height = pane_height - 60.0;
         let mut remove: Option<usize> = None;
         let mut add: Option<String> = None;
 
@@ -4304,8 +4400,8 @@ impl TiseApp {
                 ui.separator();
                 egui::ScrollArea::vertical()
                     .id_salt("trait_current")
-                    .min_scrolled_height(PANE_HEIGHT)
-                    .max_height(PANE_HEIGHT)
+                    .min_scrolled_height(list_height)
+                    .max_height(list_height)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
@@ -4346,8 +4442,8 @@ impl TiseApp {
                 if let Some(catalog) = catalog {
                     egui::ScrollArea::vertical()
                         .id_salt("trait_picker")
-                        .min_scrolled_height(PANE_HEIGHT - 28.0)
-                        .max_height(PANE_HEIGHT - 28.0)
+                        .min_scrolled_height(list_height - 28.0)
+                        .max_height(list_height - 28.0)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             for name in catalog
@@ -4686,6 +4782,11 @@ impl eframe::App for TiseApp {
 
         // Match Python UX: groups sorted by display name (namespace stripped).
         groups.sort_by_key(|g| LoadedSave::group_display_name(g).to_lowercase());
+
+        // Virtual group: a per-faction view of finishedProjectNames.
+        if objects_by_group.contains_key(statics::TI_GROUP_FACTION_STATE) {
+            groups.push(statics::GROUP_FINISHED_PROJECTS.to_string());
+        }
 
         if self.search_ref_browser_open {
             let mut open = self.search_ref_browser_open;
@@ -5456,8 +5557,14 @@ impl eframe::App for TiseApp {
                         ui.separator();
                     }
 
+                    // The virtual finished-projects group lists the factions.
+                    let objects_key = if group == statics::GROUP_FINISHED_PROJECTS {
+                        statics::TI_GROUP_FACTION_STATE
+                    } else {
+                        group.as_str()
+                    };
                     let mut objects: Vec<_> = objects_by_group
-                        .get(&group)
+                        .get(objects_key)
                         .map(|v| v.iter().collect())
                         .unwrap_or_default();
 
@@ -5588,6 +5695,11 @@ impl eframe::App for TiseApp {
                 ui.label(statics::EN_SELECT_OBJECT);
                 return;
             };
+
+            if group == statics::GROUP_FINISHED_PROJECTS {
+                self.render_finished_projects_view(ui, &mut save, object_id);
+                return;
+            }
 
             let value_obj = save.get_object_value(&group, object_id).cloned();
             let Some(value_obj) = value_obj else {

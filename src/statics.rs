@@ -348,6 +348,10 @@ pub const EN_TRAIT_ADD_TYPED: &str = "Add as typed:";
 pub const EN_PROJECT_EDITOR: &str = "Finished one-time projects";
 pub const EN_AVAILABLE_PROJECT_EDITOR: &str = "Available projects";
 pub const EN_FINISHED_PROJECT_EDITOR: &str = "Finished projects";
+/// Virtual group (not in the save): one object per faction, showing its finished projects.
+pub const GROUP_FINISHED_PROJECTS: &str = "Finished Projects";
+pub const EN_FINISHED_PROJECTS_MISSING: &str =
+    "This faction has no editable finishedProjectNames list.";
 pub const EN_PROJECT_CURRENT: &str = "Current projects";
 pub const EN_PROJECT_EDITOR_REMOVE_HINT: &str = "Click a project to remove it.";
 pub const EN_PROJECT_ADD: &str = "Add project";
