@@ -220,6 +220,8 @@ struct TiseApp {
     trait_add_filter: String,
     /// Unapplied edits to one faction's finished projects (faction id, staged list).
     finished_projects_draft: Option<(i64, Vec<TiValue>)>,
+    /// Unapplied edits to one faction's effects (faction id, staged context map).
+    faction_effects_draft: Option<(i64, indexmap::IndexMap<String, TiValue>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -2076,6 +2078,15 @@ impl TiseApp {
         } else {
             self.last_error = Some(format!("History target ID {target} not found"));
         }
+    }
+
+    /// Real save group holding TIEffectsState, if the save has one.
+    fn effects_state_group(save: &LoadedSave) -> Option<String> {
+        save.index
+            .objects_by_group
+            .keys()
+            .find(|g| LoadedSave::group_display_name(g) == statics::TI_GROUP_EFFECTS_STATE)
+            .cloned()
     }
 
     fn apply_property_edit(&mut self, save: &mut LoadedSave) {
@@ -4479,6 +4490,311 @@ impl TiseApp {
         self.last_error = None;
     }
 
+    /// Right-hand view of the virtual "Faction Effects" group: edits one faction's entry of
+    /// TIEffectsState.factionEffectsNames, recording the change as an edit of that property.
+    fn render_faction_effects_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        save: &mut LoadedSave,
+        faction_id: i64,
+    ) {
+        let prop = statics::TI_PROP_FACTION_EFFECTS_NAMES;
+        let Some(effects_group) = Self::effects_state_group(save) else {
+            return;
+        };
+        let effects_id = save
+            .index
+            .objects_by_group
+            .get(&effects_group)
+            .and_then(|v| v.first())
+            .map(|o| o.id);
+        let mut factions: Vec<(i64, String)> = save
+            .index
+            .objects_by_group
+            .get(statics::TI_GROUP_FACTION_STATE)
+            .map(|v| v.iter().map(|o| (o.id, o.display_name.clone())).collect())
+            .unwrap_or_default();
+        factions.sort_by_key(|(_, n)| n.to_lowercase());
+        let faction_name = save
+            .index
+            .id_to_display_name
+            .get(&faction_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut picked = faction_id;
+        ui.horizontal(|ui| {
+            ui.heading(statics::GROUP_FACTION_EFFECTS);
+            ui.separator();
+            egui::ComboBox::from_id_salt("faction_effects_faction")
+                .selected_text(faction_name)
+                .show_ui(ui, |ui| {
+                    for (id, name) in &factions {
+                        ui.selectable_value(&mut picked, *id, name);
+                    }
+                });
+            ui.separator();
+            ui.label(format!("ID {faction_id}"));
+        });
+        ui.separator();
+        if picked != faction_id {
+            self.select_object_user(statics::GROUP_FACTION_EFFECTS, picked);
+            return;
+        }
+
+        let before = effects_id
+            .and_then(|id| save.get_object_value(&effects_group, id))
+            .and_then(|o| o.get(prop))
+            .cloned();
+        let (Some(effects_id), Some(TiValue::Array(arr))) = (effects_id, &before) else {
+            ui.label(statics::EN_FACTION_EFFECTS_MISSING);
+            return;
+        };
+        let entry_index = arr.iter().position(|e| {
+            e.get(statics::TI_FIELD_KEY_CAP)
+                .and_then(TiValue::is_relational_ref)
+                == Some(faction_id)
+        });
+        let Some(entry_index) = entry_index else {
+            ui.label(statics::EN_FACTION_EFFECTS_MISSING);
+            return;
+        };
+        let Some(current) = arr[entry_index]
+            .get(statics::TI_FIELD_VALUE_CAP)
+            .and_then(TiValue::as_object)
+        else {
+            ui.label(statics::EN_FACTION_EFFECTS_MISSING);
+            return;
+        };
+        // Edits stay in a draft until Apply is clicked.
+        let mut staged = match &self.faction_effects_draft {
+            Some((id, draft)) if *id == faction_id => draft.clone(),
+            _ => current.clone(),
+        };
+
+        let game_data = self.game_data_snapshot();
+        let catalog = game_data
+            .as_deref()
+            .filter(|g| !g.names(crate::gamedata::TEMPLATE_EFFECTS).is_empty());
+
+        let dirty = staged != *current;
+        let mut apply = false;
+        ui.horizontal(|ui| {
+            apply = ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_APPLY))
+                .clicked();
+            if ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_REVERT))
+                .clicked()
+            {
+                staged = current.clone();
+            }
+            if dirty {
+                ui.weak(statics::EN_PROJECT_UNAPPLIED);
+            }
+            if catalog.is_none() {
+                ui.weak(statics::EN_FACTION_EFFECTS_NO_CATALOG);
+            }
+        });
+        ui.weak(statics::EN_FACTION_EFFECTS_HINT);
+        ui.separator();
+
+        // One collapsible group per context, in name order.
+        let mut contexts: Vec<String> = staged.keys().cloned().collect();
+        contexts.sort_by_key(|c| c.to_lowercase());
+        let mut remove_context: Option<String> = None;
+        egui::ScrollArea::vertical()
+            .id_salt("faction_effects_scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for ctx in &contexts {
+                    let unknown_ctx = catalog.is_some_and(|g| g.context_effects(ctx).is_empty());
+                    let list = staged
+                        .get(ctx)
+                        .and_then(TiValue::as_array)
+                        .map(<[_]>::to_vec);
+                    let count = list.as_ref().map_or(0, Vec::len);
+                    let mut title = egui::RichText::new(format!("{ctx} ({count})"));
+                    if unknown_ctx {
+                        title = title.color(egui::Color32::ORANGE);
+                    }
+                    let header = egui::CollapsingHeader::new(title)
+                        .id_salt(("faction_effects_ctx", ctx))
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            let Some(mut names) = list else {
+                                ui.weak(statics::EN_FACTION_EFFECTS_NOT_LIST);
+                                return;
+                            };
+                            let mut changed = false;
+                            let mut remove: Option<usize> = None;
+                            ui.horizontal_wrapped(|ui| {
+                                for (i, v) in names.iter().enumerate() {
+                                    let Some(name) = v.as_str() else {
+                                        continue;
+                                    };
+                                    let valid_in: Option<&[String]> =
+                                        catalog.and_then(|g| g.effect_contexts(name));
+                                    let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
+                                    let mut tip = None;
+                                    let stackable =
+                                        catalog.is_some_and(|g| g.effect_stackable(name));
+                                    if !stackable
+                                        && names[..i].iter().any(|p| p.as_str() == Some(name))
+                                    {
+                                        text = text.color(egui::Color32::LIGHT_RED);
+                                        tip = Some(statics::EN_TRAIT_DUPLICATE);
+                                    } else if catalog.is_some() && valid_in.is_none() {
+                                        text = text.color(egui::Color32::ORANGE);
+                                        tip = Some(statics::EN_FACTION_EFFECTS_UNKNOWN);
+                                    } else if valid_in.is_some_and(|c| !c.contains(ctx)) {
+                                        text = text.color(egui::Color32::ORANGE);
+                                        tip = Some(statics::EN_FACTION_EFFECTS_WRONG_CONTEXT);
+                                    }
+                                    let mut resp = ui.button(text);
+                                    if let Some(tip) = tip {
+                                        resp = resp.on_hover_text(tip);
+                                    }
+                                    if resp.clicked() {
+                                        remove = Some(i);
+                                    }
+                                }
+                            });
+                            if let Some(i) = remove {
+                                names.remove(i);
+                                changed = true;
+                            }
+
+                            // Add: pick from this context's effects, or type a name.
+                            let mut add: Option<String> = None;
+                            ui.horizontal(|ui| {
+                                if let Some(g) = catalog {
+                                    egui::ComboBox::from_id_salt(("faction_effects_add", ctx))
+                                        .selected_text(statics::EN_FACTION_EFFECTS_ADD)
+                                        .show_ui(ui, |ui| {
+                                            for e in g.context_effects(ctx) {
+                                                let present = !g.effect_stackable(e)
+                                                    && names.iter().any(|n| n.as_str() == Some(e));
+                                                if !present
+                                                    && ui.selectable_label(false, e).clicked()
+                                                {
+                                                    add = Some(e.clone());
+                                                }
+                                            }
+                                        });
+                                } else {
+                                    let id = ui.make_persistent_id(("faction_effects_text", ctx));
+                                    let mut typed: String =
+                                        ui.data_mut(|d| d.get_temp(id)).unwrap_or_default();
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut typed)
+                                            .hint_text(statics::EN_FACTION_EFFECTS_ADD),
+                                    );
+                                    if ui.button(statics::EN_FACTION_EFFECTS_ADD).clicked()
+                                        && !typed.trim().is_empty()
+                                    {
+                                        add = Some(typed.trim().to_string());
+                                        typed.clear();
+                                    }
+                                    ui.data_mut(|d| d.insert_temp(id, typed));
+                                }
+                            });
+                            if let Some(e) = add {
+                                names.push(TiValue::String(e));
+                                changed = true;
+                            }
+                            if changed {
+                                staged.insert(ctx.clone(), TiValue::Array(names));
+                            }
+                        });
+                    header.header_response.context_menu(|ui| {
+                        if ui
+                            .button(statics::EN_FACTION_EFFECTS_REMOVE_CONTEXT)
+                            .clicked()
+                        {
+                            remove_context = Some(ctx.clone());
+                            ui.close();
+                        }
+                    });
+                }
+
+                // Add a context this faction doesn't have yet.
+                ui.separator();
+                let mut new_context: Option<String> = None;
+                ui.horizontal(|ui| {
+                    ui.label(statics::EN_FACTION_EFFECTS_NEW_CONTEXT);
+                    if let Some(g) = catalog {
+                        egui::ComboBox::from_id_salt("faction_effects_new_context")
+                            .selected_text(statics::EN_FACTION_EFFECTS_ADD)
+                            .show_ui(ui, |ui| {
+                                for c in g.effect_context_names() {
+                                    if !staged.contains_key(c)
+                                        && ui.selectable_label(false, c).clicked()
+                                    {
+                                        new_context = Some(c.clone());
+                                    }
+                                }
+                            });
+                    } else {
+                        let id = ui.make_persistent_id("faction_effects_new_context_text");
+                        let mut typed: String = ui.data_mut(|d| d.get_temp(id)).unwrap_or_default();
+                        ui.add(egui::TextEdit::singleline(&mut typed));
+                        if ui.button(statics::EN_FACTION_EFFECTS_ADD).clicked()
+                            && !typed.trim().is_empty()
+                            && !staged.contains_key(typed.trim())
+                        {
+                            new_context = Some(typed.trim().to_string());
+                            typed.clear();
+                        }
+                        ui.data_mut(|d| d.insert_temp(id, typed));
+                    }
+                });
+                if let Some(c) = new_context {
+                    staged.insert(c, TiValue::Array(Vec::new()));
+                }
+            });
+        if let Some(c) = remove_context {
+            staged.shift_remove(&c);
+        }
+
+        if !apply {
+            self.faction_effects_draft = (staged != *current).then_some((faction_id, staged));
+            return;
+        }
+        let parsed = TiValue::Object(staged);
+        self.faction_effects_draft = None;
+
+        let mut after_arr = arr.clone();
+        if let Some(entry) = after_arr[entry_index].as_object_mut() {
+            entry.insert(statics::TI_FIELD_VALUE_CAP.to_string(), parsed);
+        }
+        let after = TiValue::Array(after_arr);
+        let Some(obj) = save.get_object_value_mut(&effects_group, effects_id) else {
+            self.last_error = Some(statics::EN_ERR_LOCATE_SELECTED_OBJECT.to_string());
+            return;
+        };
+        obj.insert(prop.to_string(), after.clone());
+        save.rebuild_index();
+        save.refresh_dirty();
+
+        let desc = format!(
+            "{} {}: {}",
+            statics::EN_SORT_ID,
+            effects_id,
+            Self::describe_change(prop, before.as_ref(), Some(&after))
+        );
+        self.record_action(EditAction {
+            group: effects_group,
+            object_id: effects_id,
+            prop: prop.to_string(),
+            before,
+            after: Some(after),
+            description: desc.clone(),
+        });
+        self.status = desc;
+        self.last_error = None;
+    }
+
     /// Chip-style editor for `traitTemplateNames`: click a trait to remove it,
     /// search the game's trait list to add one. `catalog` is `None` when no game
     /// folder is configured; free-text add still works then. Returns true if
@@ -4904,6 +5220,11 @@ impl eframe::App for TiseApp {
         // Virtual group: a per-faction view of finishedProjectNames.
         if objects_by_group.contains_key(statics::TI_GROUP_FACTION_STATE) {
             groups.push(statics::GROUP_FINISHED_PROJECTS.to_string());
+        }
+        // Virtual group: factionEffectsNames, split out of TIEffectsState.
+        let effects_group = Self::effects_state_group(&save);
+        if effects_group.is_some() {
+            groups.push(statics::GROUP_FACTION_EFFECTS.to_string());
         }
 
         if self.search_ref_browser_open {
@@ -5513,7 +5834,11 @@ impl eframe::App for TiseApp {
         let finished_projects_selected =
             self.selected_group.as_deref() == Some(statics::GROUP_FINISHED_PROJECTS);
 
-        if singleton_object.is_none() && !finished_projects_selected {
+        let faction_effects_selected =
+            self.selected_group.as_deref() == Some(statics::GROUP_FACTION_EFFECTS);
+
+        // Singleton selection must not hijack the virtual groups.
+        if singleton_object.is_none() && !finished_projects_selected && !faction_effects_selected {
             egui::Panel::left("objects_panel")
                 .resizable(true)
                 .default_size(360.0)
@@ -5819,6 +6144,18 @@ impl eframe::App for TiseApp {
                     self.select_object_user(&group, id);
                 }
             }
+            if group == statics::GROUP_FACTION_EFFECTS && self.selected_object_id.is_none() {
+                // No object list for this group: start on the first faction by name.
+                let first = save
+                    .index
+                    .objects_by_group
+                    .get(statics::TI_GROUP_FACTION_STATE)
+                    .and_then(|v| v.iter().min_by_key(|o| o.display_name.to_lowercase()))
+                    .map(|o| o.id);
+                if let Some(id) = first {
+                    self.select_object_user(&group, id);
+                }
+            }
             let Some(object_id) = self.selected_object_id else {
                 ui.label(statics::EN_SELECT_OBJECT);
                 return;
@@ -5826,6 +6163,10 @@ impl eframe::App for TiseApp {
 
             if group == statics::GROUP_FINISHED_PROJECTS {
                 self.render_finished_projects_view(ui, &mut save, object_id);
+                return;
+            }
+            if group == statics::GROUP_FACTION_EFFECTS {
+                self.render_faction_effects_view(ui, &mut save, object_id);
                 return;
             }
 
@@ -5850,8 +6191,10 @@ impl eframe::App for TiseApp {
             let mut properties: Vec<_> = value_obj
                 .iter()
                 .filter(|(k, _)| {
+                    let is_effects_names = k.as_str() == statics::TI_PROP_FACTION_EFFECTS_NAMES;
                     !(group == statics::TI_GROUP_FACTION_STATE
                         && k.as_str() == statics::TI_PROP_FINISHED_PROJECTS)
+                        && !(Some(&group) == effects_group.as_ref() && is_effects_names)
                 })
                 .collect();
             properties.sort_by_key(|(k, _)| (*k).to_lowercase());

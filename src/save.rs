@@ -227,6 +227,7 @@ impl LoadedSave {
             | "TITimeState"
             | "TINotificationQueueState"
             | "TIEffectsState"
+            | statics::GROUP_FACTION_EFFECTS
             | "TIGlobalResearchState"
             | "TIGlobalValuesState"
             | "TIPromptQueueState"

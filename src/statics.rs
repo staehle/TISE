@@ -350,6 +350,23 @@ pub const EN_AVAILABLE_PROJECT_EDITOR: &str = "Available projects";
 pub const EN_FINISHED_PROJECT_EDITOR: &str = "Finished projects";
 /// Virtual group (not in the save): one object per faction, showing its finished projects.
 pub const GROUP_FINISHED_PROJECTS: &str = "Finished Projects";
+/// Virtual group (not in the save): the `factionEffectsNames` property of TIEffectsState.
+pub const GROUP_FACTION_EFFECTS: &str = "Faction Effects";
+pub const TI_GROUP_EFFECTS_STATE: &str = "TIEffectsState";
+pub const TI_PROP_FACTION_EFFECTS_NAMES: &str = "factionEffectsNames";
+pub const EN_FACTION_EFFECTS_MISSING: &str = "This faction has no entry in factionEffectsNames.";
+pub const EN_FACTION_EFFECTS_NOT_LIST: &str =
+    "Not a list of effect names; edit it via TIEffectsState.";
+pub const EN_FACTION_EFFECTS_HINT: &str =
+    "Grouped by context (right-click a context header to remove it). Click an effect to remove it.";
+pub const EN_FACTION_EFFECTS_NO_CATALOG: &str =
+    "Set the game folder to validate against TIEffectTemplate.";
+pub const EN_FACTION_EFFECTS_UNKNOWN: &str = "Not found in TIEffectTemplate.";
+pub const EN_FACTION_EFFECTS_WRONG_CONTEXT: &str =
+    "TIEffectTemplate does not list this context for this effect.";
+pub const EN_FACTION_EFFECTS_ADD: &str = "Add\u{2026}";
+pub const EN_FACTION_EFFECTS_REMOVE_CONTEXT: &str = "Remove context";
+pub const EN_FACTION_EFFECTS_NEW_CONTEXT: &str = "New context:";
 pub const EN_FINISHED_PROJECTS_MISSING: &str =
     "This faction has no editable finishedProjectNames list.";
 pub const EN_PROJECT_CURRENT: &str = "Current projects";
