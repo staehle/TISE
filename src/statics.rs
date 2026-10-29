@@ -356,6 +356,10 @@ pub const EN_PROJECT_CURRENT: &str = "Current projects";
 pub const EN_PROJECT_EDITOR_REMOVE_HINT: &str = "Click a project to remove it.";
 pub const EN_PROJECT_ADD: &str = "Add project";
 pub const EN_PROJECT_SEARCH_HINT: &str = "Search projects to add...";
+pub const EN_PROJECT_REPEATABLE: &str = "Repeatable projects completed";
+pub const EN_PROJECT_REPEATABLE_HINT: &str =
+    "How many times each repeatable project has been completed.";
+pub const EN_PROJECT_REPEATABLE_EMPTY: &str = "No repeatable projects completed yet.";
 pub const EN_PROJECT_NO_GAME_DATA: &str =
     "Set the game folder (\"Game Folder...\" in the top bar) to pick from the full project list.";
 

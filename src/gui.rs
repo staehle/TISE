@@ -4345,7 +4345,8 @@ impl TiseApp {
         let repeats_ok = |n: &str| repeatable.iter().any(|r| r == n);
 
         // Fill the rest of the window; leave room for the group frames.
-        let pane_height = (ui.available_height() - 24.0).max(200.0);
+        let summary_height = 130.0;
+        let pane_height = (ui.available_height() - 24.0 - summary_height).max(200.0);
         let changed = Self::render_trait_editor(
             ui,
             &mut staged,
@@ -4355,6 +4356,47 @@ impl TiseApp {
             &repeats_ok,
             pane_height,
         );
+
+        // Times each repeatable project was completed, in order of first appearance.
+        let mut repeat_counts: Vec<(&str, usize)> = Vec::new();
+        for name in staged.iter().filter_map(TiValue::as_str) {
+            if !repeats_ok(name) {
+                continue;
+            }
+            match repeat_counts.iter_mut().find(|(n, _)| *n == name) {
+                Some((_, count)) => *count += 1,
+                None => repeat_counts.push((name, 1)),
+            }
+        }
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.strong(format!(
+                "{} ({})",
+                statics::EN_PROJECT_REPEATABLE,
+                repeat_counts.len()
+            ));
+            ui.weak(statics::EN_PROJECT_REPEATABLE_HINT);
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .id_salt("finished_repeatable_counts")
+                .max_height(summary_height - 70.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    if repeat_counts.is_empty() {
+                        ui.weak(statics::EN_PROJECT_REPEATABLE_EMPTY);
+                    }
+                    egui::Grid::new("finished_repeatable_grid")
+                        .num_columns(2)
+                        .spacing([16.0, 2.0])
+                        .show(ui, |ui| {
+                            for (name, count) in &repeat_counts {
+                                ui.label(*name);
+                                ui.label(count.to_string());
+                                ui.end_row();
+                            }
+                        });
+                });
+        });
         if !changed {
             return;
         }
