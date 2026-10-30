@@ -202,8 +202,12 @@ impl LoadedSave {
             return GroupCategory::Facilities;
         }
         match name {
-            "TIFactionState" | "TIPlayerState" | "TICouncilorState" | "TIOrgState"
-            | "TIOfficerState" => GroupCategory::FactionsAndPeople,
+            "TIFactionState"
+            | "TIPlayerState"
+            | "TICouncilorState"
+            | "TIOrgState"
+            | "TIOfficerState"
+            | statics::GROUP_FINISHED_PROJECTS => GroupCategory::FactionsAndPeople,
             "TINationState"
             | "TIControlPoint"
             | "TIArmyState"
@@ -223,6 +227,7 @@ impl LoadedSave {
             | "TITimeState"
             | "TINotificationQueueState"
             | "TIEffectsState"
+            | statics::GROUP_FACTION_EFFECTS
             | "TIGlobalResearchState"
             | "TIGlobalValuesState"
             | "TIPromptQueueState"
