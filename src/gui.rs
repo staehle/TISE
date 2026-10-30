@@ -51,6 +51,8 @@ struct NameListLabels {
     add: &'static str,
     search_hint: &'static str,
     no_game_data: &'static str,
+    /// Leave repeatable entries out of the current list (shown elsewhere).
+    hide_repeatable: bool,
 }
 
 const NAME_LIST_TRAITS: NameListLabels = NameListLabels {
@@ -60,6 +62,7 @@ const NAME_LIST_TRAITS: NameListLabels = NameListLabels {
     add: statics::EN_TRAIT_ADD,
     search_hint: statics::EN_TRAIT_SEARCH_HINT,
     no_game_data: statics::EN_TRAIT_NO_GAME_DATA,
+    hide_repeatable: false,
 };
 
 const NAME_LIST_PROJECTS: NameListLabels = NameListLabels {
@@ -69,10 +72,17 @@ const NAME_LIST_PROJECTS: NameListLabels = NameListLabels {
     add: statics::EN_PROJECT_ADD,
     search_hint: statics::EN_PROJECT_SEARCH_HINT,
     no_game_data: statics::EN_PROJECT_NO_GAME_DATA,
+    hide_repeatable: false,
 };
 
 const NAME_LIST_AVAILABLE_PROJECTS: NameListLabels = NameListLabels {
     title: statics::EN_AVAILABLE_PROJECT_EDITOR,
+    ..NAME_LIST_PROJECTS
+};
+
+const NAME_LIST_FINISHED_PROJECTS: NameListLabels = NameListLabels {
+    title: statics::EN_FINISHED_PROJECT_EDITOR,
+    hide_repeatable: true,
     ..NAME_LIST_PROJECTS
 };
 
@@ -83,6 +93,7 @@ const NAME_LIST_TECHS: NameListLabels = NameListLabels {
     add: statics::EN_TECH_ADD,
     search_hint: statics::EN_TECH_SEARCH_HINT,
     no_game_data: statics::EN_TECH_NO_GAME_DATA,
+    hide_repeatable: false,
 };
 
 /// The main application state and GUI logic.
@@ -207,6 +218,10 @@ struct TiseApp {
     game_dir_error: Option<String>,
     /// Search text for the councillor trait picker.
     trait_add_filter: String,
+    /// Unapplied edits to one faction's finished projects (faction id, staged list).
+    finished_projects_draft: Option<(i64, Vec<TiValue>)>,
+    /// Unapplied edits to one faction's effects (faction id, staged context map).
+    faction_effects_draft: Option<(i64, indexmap::IndexMap<String, TiValue>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -2065,6 +2080,15 @@ impl TiseApp {
         }
     }
 
+    /// Real save group holding TIEffectsState, if the save has one.
+    fn effects_state_group(save: &LoadedSave) -> Option<String> {
+        save.index
+            .objects_by_group
+            .keys()
+            .find(|g| LoadedSave::group_display_name(g) == statics::TI_GROUP_EFFECTS_STATE)
+            .cloned()
+    }
+
     fn apply_property_edit(&mut self, save: &mut LoadedSave) {
         let Some(group) = self.selected_group.clone() else {
             return;
@@ -3317,6 +3341,10 @@ impl TiseApp {
                                         crate::gamedata::TEMPLATE_PROJECTS,
                                         &NAME_LIST_AVAILABLE_PROJECTS,
                                     )),
+                                    statics::TI_PROP_FINISHED_PROJECTS => Some((
+                                        crate::gamedata::TEMPLATE_PROJECTS,
+                                        &NAME_LIST_FINISHED_PROJECTS,
+                                    )),
                                     statics::TI_PROP_FINISHED_TECHS => {
                                         Some((crate::gamedata::TEMPLATE_TECHS, &NAME_LIST_TECHS))
                                     }
@@ -3335,6 +3363,22 @@ impl TiseApp {
                                         .as_deref()
                                         .map(|g| g.names(template))
                                         .filter(|c| !c.is_empty());
+                                    // Repeatable projects get one finished entry per
+                                    // completion, so duplicates are legitimate there.
+                                    let repeatable: &[String] =
+                                        if prop == statics::TI_PROP_FINISHED_PROJECTS {
+                                            game_data
+                                                .as_deref()
+                                                .map(|g| {
+                                                    g.names(
+                                                    crate::gamedata::TEMPLATE_REPEATABLE_PROJECTS,
+                                                )
+                                                })
+                                                .unwrap_or_default()
+                                        } else {
+                                            &[]
+                                        };
+                                    let repeats_ok = |n: &str| repeatable.iter().any(|r| r == n);
                                     let mut changed = false;
                                     ui.group(|ui| {
                                         ui.label(labels.title);
@@ -3344,6 +3388,8 @@ impl TiseApp {
                                             catalog,
                                             &mut self.trait_add_filter,
                                             labels,
+                                            &repeats_ok,
+                                            260.0,
                                         );
                                     });
                                     if changed {
@@ -4247,6 +4293,590 @@ impl TiseApp {
         }
     }
 
+    /// Right-hand view of the virtual "Finished Projects" group: edits one faction's
+    /// `finishedProjectNames`, recording the change as an edit of the faction itself.
+    fn render_finished_projects_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        save: &mut LoadedSave,
+        faction_id: i64,
+    ) {
+        let faction_group = statics::TI_GROUP_FACTION_STATE;
+        let prop = statics::TI_PROP_FINISHED_PROJECTS;
+        let mut factions: Vec<(i64, String)> = save
+            .index
+            .objects_by_group
+            .get(statics::TI_GROUP_FACTION_STATE)
+            .map(|v| v.iter().map(|o| (o.id, o.display_name.clone())).collect())
+            .unwrap_or_default();
+        factions.sort_by_key(|(_, n)| n.to_lowercase());
+        let faction_name = save
+            .index
+            .id_to_display_name
+            .get(&faction_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut picked = faction_id;
+        ui.horizontal(|ui| {
+            ui.heading(statics::GROUP_FINISHED_PROJECTS);
+            ui.separator();
+            egui::ComboBox::from_id_salt("finished_projects_faction")
+                .selected_text(faction_name)
+                .show_ui(ui, |ui| {
+                    for (id, name) in &factions {
+                        ui.selectable_value(&mut picked, *id, name);
+                    }
+                });
+            ui.separator();
+            ui.label(format!("ID {faction_id}"));
+        });
+        ui.separator();
+        if picked != faction_id {
+            self.select_object_user(statics::GROUP_FINISHED_PROJECTS, picked);
+            return;
+        }
+
+        let before = save
+            .get_object_value(faction_group, faction_id)
+            .and_then(|o| o.get(prop))
+            .cloned();
+        let Some(TiValue::Array(arr)) = &before else {
+            ui.label(statics::EN_FINISHED_PROJECTS_MISSING);
+            return;
+        };
+        if !arr.iter().all(|v| matches!(v, TiValue::String(_))) {
+            ui.label(statics::EN_FINISHED_PROJECTS_MISSING);
+            return;
+        }
+        // Edits stay in a draft until Apply is clicked.
+        let mut staged = match &self.finished_projects_draft {
+            Some((id, draft)) if *id == faction_id => draft.clone(),
+            _ => arr.clone(),
+        };
+
+        let game_data = self.game_data_snapshot();
+        let catalog = game_data
+            .as_deref()
+            .map(|g| g.names(crate::gamedata::TEMPLATE_PROJECTS))
+            .filter(|c| !c.is_empty());
+        let repeatable: &[String] = game_data
+            .as_deref()
+            .map(|g| g.names(crate::gamedata::TEMPLATE_REPEATABLE_PROJECTS))
+            .unwrap_or_default();
+        let repeats_ok = |n: &str| repeatable.iter().any(|r| r == n);
+
+        // Fill the rest of the window; leave room for the group frames.
+        let summary_height = 130.0;
+        let pane_height = (ui.available_height() - 24.0 - summary_height - 32.0).max(200.0);
+        Self::render_trait_editor(
+            ui,
+            &mut staged,
+            catalog,
+            &mut self.trait_add_filter,
+            &NAME_LIST_FINISHED_PROJECTS,
+            &repeats_ok,
+            pane_height,
+        );
+
+        // Times each repeatable project was completed, in order of first appearance.
+        let mut repeat_counts: Vec<(String, usize)> = Vec::new();
+        for name in staged.iter().filter_map(TiValue::as_str) {
+            if !repeats_ok(name) {
+                continue;
+            }
+            match repeat_counts.iter_mut().find(|(n, _)| n == name) {
+                Some((_, count)) => *count += 1,
+                None => repeat_counts.push((name.to_string(), 1)),
+            }
+        }
+        let mut count_edits: Vec<(String, usize, usize)> = Vec::new();
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.strong(format!(
+                "{} ({})",
+                statics::EN_PROJECT_REPEATABLE,
+                repeat_counts.len()
+            ));
+            ui.weak(statics::EN_PROJECT_REPEATABLE_HINT);
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .id_salt("finished_repeatable_counts")
+                .max_height(summary_height - 70.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    if repeat_counts.is_empty() {
+                        ui.weak(statics::EN_PROJECT_REPEATABLE_EMPTY);
+                    }
+                    egui::Grid::new("finished_repeatable_grid")
+                        .num_columns(2)
+                        .spacing([16.0, 2.0])
+                        .show(ui, |ui| {
+                            for (name, count) in &repeat_counts {
+                                ui.label(name);
+                                // Minimum 1: use the list above to remove a project outright.
+                                let mut edited = *count;
+                                if ui
+                                    .add(egui::DragValue::new(&mut edited).range(1..=9999))
+                                    .changed()
+                                    && edited != *count
+                                {
+                                    count_edits.push((name.clone(), *count, edited));
+                                }
+                                ui.end_row();
+                            }
+                        });
+                });
+        });
+        for (name, old, new) in count_edits {
+            if new > old {
+                staged.extend((old..new).map(|_| TiValue::String(name.clone())));
+            } else {
+                // Drop the surplus entries from the end of the list.
+                for _ in new..old {
+                    if let Some(pos) = staged.iter().rposition(|v| v.as_str() == Some(&name)) {
+                        staged.remove(pos);
+                    }
+                }
+            }
+        }
+
+        let dirty = staged != *arr;
+        let mut apply = false;
+        ui.horizontal(|ui| {
+            apply = ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_APPLY))
+                .clicked();
+            if ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_REVERT))
+                .clicked()
+            {
+                staged = arr.clone();
+            }
+            if dirty {
+                ui.weak(statics::EN_PROJECT_UNAPPLIED);
+            }
+        });
+        if !apply {
+            self.finished_projects_draft = (staged != *arr).then_some((faction_id, staged));
+            return;
+        }
+        self.finished_projects_draft = None;
+
+        let after = TiValue::Array(staged);
+        let Some(obj) = save.get_object_value_mut(faction_group, faction_id) else {
+            self.last_error = Some(statics::EN_ERR_LOCATE_SELECTED_OBJECT.to_string());
+            return;
+        };
+        obj.insert(prop.to_string(), after.clone());
+        save.rebuild_index();
+        save.refresh_dirty();
+
+        let desc = format!(
+            "{} {}: {}",
+            statics::EN_SORT_ID,
+            faction_id,
+            Self::describe_change(prop, before.as_ref(), Some(&after))
+        );
+        self.record_action(EditAction {
+            group: faction_group.to_string(),
+            object_id: faction_id,
+            prop: prop.to_string(),
+            before,
+            after: Some(after),
+            description: desc.clone(),
+        });
+        self.status = desc;
+        self.last_error = None;
+    }
+
+    /// Right-hand view of the virtual "Faction Effects" group: edits one faction's entry of
+    /// TIEffectsState.factionEffectsNames, recording the change as an edit of that property.
+    fn render_faction_effects_view(
+        &mut self,
+        ui: &mut egui::Ui,
+        save: &mut LoadedSave,
+        faction_id: i64,
+    ) {
+        let prop = statics::TI_PROP_FACTION_EFFECTS_NAMES;
+        let Some(effects_group) = Self::effects_state_group(save) else {
+            return;
+        };
+        let effects_id = save
+            .index
+            .objects_by_group
+            .get(&effects_group)
+            .and_then(|v| v.first())
+            .map(|o| o.id);
+        let mut factions: Vec<(i64, String)> = save
+            .index
+            .objects_by_group
+            .get(statics::TI_GROUP_FACTION_STATE)
+            .map(|v| v.iter().map(|o| (o.id, o.display_name.clone())).collect())
+            .unwrap_or_default();
+        factions.sort_by_key(|(_, n)| n.to_lowercase());
+        let faction_name = save
+            .index
+            .id_to_display_name
+            .get(&faction_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut picked = faction_id;
+        ui.horizontal(|ui| {
+            ui.heading(statics::GROUP_FACTION_EFFECTS);
+            ui.separator();
+            egui::ComboBox::from_id_salt("faction_effects_faction")
+                .selected_text(faction_name)
+                .show_ui(ui, |ui| {
+                    for (id, name) in &factions {
+                        ui.selectable_value(&mut picked, *id, name);
+                    }
+                });
+            ui.separator();
+            ui.label(format!("ID {faction_id}"));
+        });
+        ui.separator();
+        if picked != faction_id {
+            self.select_object_user(statics::GROUP_FACTION_EFFECTS, picked);
+            return;
+        }
+
+        let before = effects_id
+            .and_then(|id| save.get_object_value(&effects_group, id))
+            .and_then(|o| o.get(prop))
+            .cloned();
+        let (Some(effects_id), Some(TiValue::Array(arr))) = (effects_id, &before) else {
+            ui.label(statics::EN_FACTION_EFFECTS_MISSING);
+            return;
+        };
+        let entry_index = arr.iter().position(|e| {
+            e.get(statics::TI_FIELD_KEY_CAP)
+                .and_then(TiValue::is_relational_ref)
+                == Some(faction_id)
+        });
+        let Some(entry_index) = entry_index else {
+            ui.label(statics::EN_FACTION_EFFECTS_MISSING);
+            return;
+        };
+        let Some(current) = arr[entry_index]
+            .get(statics::TI_FIELD_VALUE_CAP)
+            .and_then(TiValue::as_object)
+        else {
+            ui.label(statics::EN_FACTION_EFFECTS_MISSING);
+            return;
+        };
+        // Edits stay in a draft until Apply is clicked.
+        let mut staged = match &self.faction_effects_draft {
+            Some((id, draft)) if *id == faction_id => draft.clone(),
+            _ => current.clone(),
+        };
+
+        let game_data = self.game_data_snapshot();
+        let catalog = game_data
+            .as_deref()
+            .filter(|g| !g.names(crate::gamedata::TEMPLATE_EFFECTS).is_empty());
+
+        let dirty = staged != *current;
+        let mut apply = false;
+        ui.horizontal(|ui| {
+            apply = ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_APPLY))
+                .clicked();
+            if ui
+                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_REVERT))
+                .clicked()
+            {
+                staged = current.clone();
+            }
+            if dirty {
+                ui.weak(statics::EN_PROJECT_UNAPPLIED);
+            }
+            if catalog.is_none() {
+                ui.weak(statics::EN_FACTION_EFFECTS_NO_CATALOG);
+            }
+        });
+        ui.weak(statics::EN_FACTION_EFFECTS_HINT);
+        ui.separator();
+
+        // One collapsible group per context, in name order.
+        let mut contexts: Vec<String> = staged.keys().cloned().collect();
+        contexts.sort_by_key(|c| c.to_lowercase());
+        let mut remove_context: Option<String> = None;
+        egui::ScrollArea::vertical()
+            .id_salt("faction_effects_scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for ctx in &contexts {
+                    let unknown_ctx = catalog.is_some_and(|g| g.context_effects(ctx).is_empty());
+                    let list = staged
+                        .get(ctx)
+                        .and_then(TiValue::as_array)
+                        .map(<[_]>::to_vec);
+                    let count = list.as_ref().map_or(0, Vec::len);
+                    let mut title = egui::RichText::new(format!("{ctx} ({count})"));
+                    if unknown_ctx {
+                        title = title.color(egui::Color32::ORANGE);
+                    }
+                    let header = egui::CollapsingHeader::new(title)
+                        .id_salt(("faction_effects_ctx", ctx))
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            let Some(mut names) = list else {
+                                ui.weak(statics::EN_FACTION_EFFECTS_NOT_LIST);
+                                return;
+                            };
+                            let mut changed = false;
+                            let mut remove: Option<usize> = None;
+                            let mut set_count: Option<(String, usize)> = None;
+                            ui.horizontal_wrapped(|ui| {
+                                for (i, v) in names.iter().enumerate() {
+                                    let Some(name) = v.as_str() else {
+                                        continue;
+                                    };
+                                    let stackable =
+                                        catalog.is_some_and(|g| g.effect_stackable(name));
+                                    // Stackable effects collapse into one chip at their first
+                                    // occurrence, with an editable occurrence count.
+                                    let mut occurrences = 1;
+                                    if stackable {
+                                        if names[..i].iter().any(|p| p.as_str() == Some(name)) {
+                                            continue;
+                                        }
+                                        occurrences = names
+                                            .iter()
+                                            .filter(|p| p.as_str() == Some(name))
+                                            .count();
+                                    }
+                                    let valid_in: Option<&[String]> =
+                                        catalog.and_then(|g| g.effect_contexts(name));
+                                    let mut text = egui::RichText::new(if stackable {
+                                        name.to_string()
+                                    } else {
+                                        format!("{name}  \u{2715}")
+                                    });
+                                    let mut tip = None;
+                                    if !stackable
+                                        && names[..i].iter().any(|p| p.as_str() == Some(name))
+                                    {
+                                        text = text.color(egui::Color32::LIGHT_RED);
+                                        tip = Some(statics::EN_TRAIT_DUPLICATE);
+                                    } else if catalog.is_some() && valid_in.is_none() {
+                                        text = text.color(egui::Color32::ORANGE);
+                                        tip = Some(statics::EN_FACTION_EFFECTS_UNKNOWN);
+                                    } else if valid_in.is_some_and(|c| !c.contains(ctx)) {
+                                        text = text.color(egui::Color32::ORANGE);
+                                        tip = Some(statics::EN_FACTION_EFFECTS_WRONG_CONTEXT);
+                                    }
+                                    if stackable {
+                                        // Chip with the editable count inside; the cross drops them all.
+                                        let widget = ui.visuals().widgets.inactive;
+                                        let mut count = occurrences;
+                                        let mut drop_all = false;
+                                        let chip = egui::Frame::new()
+                                            .fill(widget.weak_bg_fill)
+                                            .corner_radius(widget.corner_radius)
+                                            .inner_margin(egui::Margin::symmetric(6, 2))
+                                            .show(ui, |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.spacing_mut().item_spacing.x = 4.0;
+                                                    // Reserve the bordered field's full height up front so
+                                                    // the items placed before it centre against it.
+                                                    let border = 4.0;
+                                                    ui.set_min_height(
+                                                        ui.spacing().interact_size.y + 2.0 * border,
+                                                    );
+                                                    let label = ui.label(text);
+                                                    egui::Frame::new()
+                                                        .stroke(egui::Stroke::new(
+                                                            border,
+                                                            ui.visuals()
+                                                                .widgets
+                                                                .noninteractive
+                                                                .bg_stroke
+                                                                .color,
+                                                        ))
+                                                        .corner_radius(widget.corner_radius)
+                                                        .show(ui, |ui| {
+                                                            ui.add(
+                                                                egui::DragValue::new(&mut count)
+                                                                    .range(0..=999),
+                                                            );
+                                                        });
+                                                    drop_all = ui
+                                                        .add(
+                                                            egui::Button::new("\u{2715}")
+                                                                .frame(false),
+                                                        )
+                                                        .clicked();
+                                                    label
+                                                })
+                                                .inner
+                                            });
+                                        if let Some(tip) = tip {
+                                            chip.inner.on_hover_text(tip);
+                                        }
+                                        if drop_all {
+                                            set_count = Some((name.to_string(), 0));
+                                        } else if count != occurrences {
+                                            set_count = Some((name.to_string(), count));
+                                        }
+                                    } else {
+                                        let mut resp = ui.button(text);
+                                        if let Some(tip) = tip {
+                                            resp = resp.on_hover_text(tip);
+                                        }
+                                        if resp.clicked() {
+                                            remove = Some(i);
+                                        }
+                                    }
+                                }
+                            });
+                            if let Some(i) = remove {
+                                names.remove(i);
+                                changed = true;
+                            }
+                            if let Some((e, count)) = set_count {
+                                // Keep the stack at its first position.
+                                let at = names.iter().position(|p| p.as_str() == Some(&e));
+                                names.retain(|p| p.as_str() != Some(&e));
+                                let at = at.unwrap_or(names.len()).min(names.len());
+                                for _ in 0..count {
+                                    names.insert(at, TiValue::String(e.clone()));
+                                }
+                                changed = true;
+                            }
+
+                            // Add: pick from this context's effects, or type a name.
+                            let mut add: Option<String> = None;
+                            ui.horizontal(|ui| {
+                                if let Some(g) = catalog {
+                                    egui::ComboBox::from_id_salt(("faction_effects_add", ctx))
+                                        .selected_text(statics::EN_FACTION_EFFECTS_ADD)
+                                        .show_ui(ui, |ui| {
+                                            for e in g.context_effects(ctx) {
+                                                let present = !g.effect_stackable(e)
+                                                    && names.iter().any(|n| n.as_str() == Some(e));
+                                                if !present
+                                                    && ui.selectable_label(false, e).clicked()
+                                                {
+                                                    add = Some(e.clone());
+                                                }
+                                            }
+                                        });
+                                } else {
+                                    let id = ui.make_persistent_id(("faction_effects_text", ctx));
+                                    let mut typed: String =
+                                        ui.data_mut(|d| d.get_temp(id)).unwrap_or_default();
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut typed)
+                                            .hint_text(statics::EN_FACTION_EFFECTS_ADD),
+                                    );
+                                    if ui.button(statics::EN_FACTION_EFFECTS_ADD).clicked()
+                                        && !typed.trim().is_empty()
+                                    {
+                                        add = Some(typed.trim().to_string());
+                                        typed.clear();
+                                    }
+                                    ui.data_mut(|d| d.insert_temp(id, typed));
+                                }
+                            });
+                            if let Some(e) = add {
+                                names.push(TiValue::String(e));
+                                changed = true;
+                            }
+                            if changed {
+                                staged.insert(ctx.clone(), TiValue::Array(names));
+                            }
+                        });
+                    header.header_response.context_menu(|ui| {
+                        if ui
+                            .button(statics::EN_FACTION_EFFECTS_REMOVE_CONTEXT)
+                            .clicked()
+                        {
+                            remove_context = Some(ctx.clone());
+                            ui.close();
+                        }
+                    });
+                }
+
+                // Add a context this faction doesn't have yet.
+                ui.separator();
+                let mut new_context: Option<String> = None;
+                ui.horizontal(|ui| {
+                    ui.label(statics::EN_FACTION_EFFECTS_NEW_CONTEXT);
+                    if let Some(g) = catalog {
+                        egui::ComboBox::from_id_salt("faction_effects_new_context")
+                            .selected_text(statics::EN_FACTION_EFFECTS_ADD)
+                            .show_ui(ui, |ui| {
+                                for c in g.effect_context_names() {
+                                    if !staged.contains_key(c)
+                                        && ui.selectable_label(false, c).clicked()
+                                    {
+                                        new_context = Some(c.clone());
+                                    }
+                                }
+                            });
+                    } else {
+                        let id = ui.make_persistent_id("faction_effects_new_context_text");
+                        let mut typed: String = ui.data_mut(|d| d.get_temp(id)).unwrap_or_default();
+                        ui.add(egui::TextEdit::singleline(&mut typed));
+                        if ui.button(statics::EN_FACTION_EFFECTS_ADD).clicked()
+                            && !typed.trim().is_empty()
+                            && !staged.contains_key(typed.trim())
+                        {
+                            new_context = Some(typed.trim().to_string());
+                            typed.clear();
+                        }
+                        ui.data_mut(|d| d.insert_temp(id, typed));
+                    }
+                });
+                if let Some(c) = new_context {
+                    staged.insert(c, TiValue::Array(Vec::new()));
+                }
+            });
+        if let Some(c) = remove_context {
+            staged.shift_remove(&c);
+        }
+
+        if !apply {
+            self.faction_effects_draft = (staged != *current).then_some((faction_id, staged));
+            return;
+        }
+        let parsed = TiValue::Object(staged);
+        self.faction_effects_draft = None;
+
+        let mut after_arr = arr.clone();
+        if let Some(entry) = after_arr[entry_index].as_object_mut() {
+            entry.insert(statics::TI_FIELD_VALUE_CAP.to_string(), parsed);
+        }
+        let after = TiValue::Array(after_arr);
+        let Some(obj) = save.get_object_value_mut(&effects_group, effects_id) else {
+            self.last_error = Some(statics::EN_ERR_LOCATE_SELECTED_OBJECT.to_string());
+            return;
+        };
+        obj.insert(prop.to_string(), after.clone());
+        save.rebuild_index();
+        save.refresh_dirty();
+
+        let desc = format!(
+            "{} {}: {}",
+            statics::EN_SORT_ID,
+            effects_id,
+            Self::describe_change(prop, before.as_ref(), Some(&after))
+        );
+        self.record_action(EditAction {
+            group: effects_group,
+            object_id: effects_id,
+            prop: prop.to_string(),
+            before,
+            after: Some(after),
+            description: desc.clone(),
+        });
+        self.status = desc;
+        self.last_error = None;
+    }
+
     /// Chip-style editor for `traitTemplateNames`: click a trait to remove it,
     /// search the game's trait list to add one. `catalog` is `None` when no game
     /// folder is configured; free-text add still works then. Returns true if
@@ -4257,6 +4887,8 @@ impl TiseApp {
         catalog: Option<&[String]>,
         filter: &mut String,
         labels: &NameListLabels,
+        repeats_ok: &dyn Fn(&str) -> bool,
+        pane_height: f32,
     ) -> bool {
         let mut changed = false;
         let current: Vec<String> = arr
@@ -4264,25 +4896,33 @@ impl TiseApp {
             .filter_map(|v| v.as_str().map(str::to_string))
             .collect();
 
-        const PANE_HEIGHT: f32 = 200.0;
+        // Scroll areas sit below a ~3-line header inside the group.
+        let list_height = pane_height - 60.0;
         let mut remove: Option<usize> = None;
         let mut add: Option<String> = None;
 
         // Two side-by-side panes: what the councillor has, and what can be added.
         ui.columns(2, |cols| {
             cols[0].group(|ui| {
-                ui.strong(format!("{} ({})", labels.current, current.len()));
+                let shown = current
+                    .iter()
+                    .filter(|n| !(labels.hide_repeatable && repeats_ok(n)))
+                    .count();
+                ui.strong(format!("{} ({})", labels.current, shown));
                 ui.weak(labels.remove_hint);
                 ui.separator();
                 egui::ScrollArea::vertical()
                     .id_salt("trait_current")
-                    .min_scrolled_height(PANE_HEIGHT)
-                    .max_height(PANE_HEIGHT)
+                    .min_scrolled_height(list_height)
+                    .max_height(list_height)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             for (i, name) in current.iter().enumerate() {
-                                let duplicate = current[..i].contains(name);
+                                if labels.hide_repeatable && repeats_ok(name) {
+                                    continue;
+                                }
+                                let duplicate = current[..i].contains(name) && !repeats_ok(name);
                                 let unknown = catalog.is_some_and(|c| !c.contains(name));
                                 let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
                                 let mut tip = None;
@@ -4318,13 +4958,13 @@ impl TiseApp {
                 if let Some(catalog) = catalog {
                     egui::ScrollArea::vertical()
                         .id_salt("trait_picker")
-                        .min_scrolled_height(PANE_HEIGHT - 28.0)
-                        .max_height(PANE_HEIGHT - 28.0)
+                        .min_scrolled_height(list_height - 28.0)
+                        .max_height(list_height - 28.0)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             for name in catalog
                                 .iter()
-                                .filter(|n| !current.contains(n))
+                                .filter(|n| !current.contains(n) || repeats_ok(n))
                                 .filter(|n| needle.is_empty() || n.to_lowercase().contains(&needle))
                             {
                                 let row = egui::Button::new(format!("+  {name}"))
@@ -4658,6 +5298,16 @@ impl eframe::App for TiseApp {
 
         // Match Python UX: groups sorted by display name (namespace stripped).
         groups.sort_by_key(|g| LoadedSave::group_display_name(g).to_lowercase());
+
+        // Virtual group: a per-faction view of finishedProjectNames.
+        if objects_by_group.contains_key(statics::TI_GROUP_FACTION_STATE) {
+            groups.push(statics::GROUP_FINISHED_PROJECTS.to_string());
+        }
+        // Virtual group: factionEffectsNames, split out of TIEffectsState.
+        let effects_group = Self::effects_state_group(&save);
+        if effects_group.is_some() {
+            groups.push(statics::GROUP_FACTION_EFFECTS.to_string());
+        }
 
         if self.search_ref_browser_open {
             let mut open = self.search_ref_browser_open;
@@ -5262,7 +5912,15 @@ impl eframe::App for TiseApp {
             self.select_object_internal(group, *id, false, false, false);
         }
 
-        if singleton_object.is_none() {
+        // Finished Projects picks its faction from the top bar instead.
+        let finished_projects_selected =
+            self.selected_group.as_deref() == Some(statics::GROUP_FINISHED_PROJECTS);
+
+        let faction_effects_selected =
+            self.selected_group.as_deref() == Some(statics::GROUP_FACTION_EFFECTS);
+
+        // Singleton selection must not hijack the virtual groups.
+        if singleton_object.is_none() && !finished_projects_selected && !faction_effects_selected {
             egui::Panel::left("objects_panel")
                 .resizable(true)
                 .default_size(360.0)
@@ -5429,7 +6087,7 @@ impl eframe::App for TiseApp {
                     }
 
                     let mut objects: Vec<_> = objects_by_group
-                        .get(&group)
+                        .get(group.as_str())
                         .map(|v| v.iter().collect())
                         .unwrap_or_default();
 
@@ -5556,10 +6214,43 @@ impl eframe::App for TiseApp {
                 ui.label(statics::EN_SELECT_GROUP_LEFT);
                 return;
             };
+            if group == statics::GROUP_FINISHED_PROJECTS && self.selected_object_id.is_none() {
+                // No object list for this group: start on the first faction by name.
+                let first = save
+                    .index
+                    .objects_by_group
+                    .get(statics::TI_GROUP_FACTION_STATE)
+                    .and_then(|v| v.iter().min_by_key(|o| o.display_name.to_lowercase()))
+                    .map(|o| o.id);
+                if let Some(id) = first {
+                    self.select_object_user(&group, id);
+                }
+            }
+            if group == statics::GROUP_FACTION_EFFECTS && self.selected_object_id.is_none() {
+                // No object list for this group: start on the first faction by name.
+                let first = save
+                    .index
+                    .objects_by_group
+                    .get(statics::TI_GROUP_FACTION_STATE)
+                    .and_then(|v| v.iter().min_by_key(|o| o.display_name.to_lowercase()))
+                    .map(|o| o.id);
+                if let Some(id) = first {
+                    self.select_object_user(&group, id);
+                }
+            }
             let Some(object_id) = self.selected_object_id else {
                 ui.label(statics::EN_SELECT_OBJECT);
                 return;
             };
+
+            if group == statics::GROUP_FINISHED_PROJECTS {
+                self.render_finished_projects_view(ui, &mut save, object_id);
+                return;
+            }
+            if group == statics::GROUP_FACTION_EFFECTS {
+                self.render_faction_effects_view(ui, &mut save, object_id);
+                return;
+            }
 
             let value_obj = save.get_object_value(&group, object_id).cloned();
             let Some(value_obj) = value_obj else {
@@ -5578,7 +6269,16 @@ impl eframe::App for TiseApp {
             });
             ui.separator();
 
-            let mut properties: Vec<_> = value_obj.iter().collect();
+            // Faction finished projects are edited in the virtual Finished Projects group.
+            let mut properties: Vec<_> = value_obj
+                .iter()
+                .filter(|(k, _)| {
+                    let is_effects_names = k.as_str() == statics::TI_PROP_FACTION_EFFECTS_NAMES;
+                    !(group == statics::TI_GROUP_FACTION_STATE
+                        && k.as_str() == statics::TI_PROP_FINISHED_PROJECTS)
+                        && !(Some(&group) == effects_group.as_ref() && is_effects_names)
+                })
+                .collect();
             properties.sort_by_key(|(k, _)| (*k).to_lowercase());
 
             // Movable horizontal split between Properties (top) and Edit (bottom).

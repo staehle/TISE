@@ -20,6 +20,7 @@ use std::sync::mpsc::{Receiver, TryRecvError};
 pub const TEMPLATE_TRAITS: &str = "TITraitTemplate";
 pub const TEMPLATE_PROJECTS: &str = "TIProjectTemplate";
 pub const TEMPLATE_TECHS: &str = "TITechTemplate";
+pub const TEMPLATE_EFFECTS: &str = "TIEffectTemplate";
 /// Catalogue key for projects with `oneTimeGlobally: true` (same file as
 /// [`TEMPLATE_PROJECTS`]).
 pub const TEMPLATE_ONE_TIME_PROJECTS: &str = "TIProjectTemplate#oneTimeGlobally";
@@ -33,6 +34,7 @@ const CATALOGUES: &[(&str, &str, Option<&str>)] = &[
     (TEMPLATE_TRAITS, TEMPLATE_TRAITS, None),
     (TEMPLATE_PROJECTS, TEMPLATE_PROJECTS, None),
     (TEMPLATE_TECHS, TEMPLATE_TECHS, None),
+    (TEMPLATE_EFFECTS, TEMPLATE_EFFECTS, None),
     (
         TEMPLATE_ONE_TIME_PROJECTS,
         TEMPLATE_PROJECTS,
@@ -322,9 +324,38 @@ pub struct GameData {
     names: BTreeMap<String, Vec<String>>,
     /// `researchCost` per project `dataName` (negative = not researchable).
     project_costs: BTreeMap<String, f64>,
+    /// `contexts` per effect `dataName` (empty = the template lists none).
+    effect_contexts: BTreeMap<String, Vec<String>>,
+    /// Inverse of `effect_contexts`: effect names usable in each context.
+    context_effects: BTreeMap<String, Vec<String>>,
+    /// Effects whose template sets `stackable: true`.
+    stackable_effects: BTreeSet<String>,
 }
 
 impl GameData {
+    /// Contexts an effect applies to; `None` if the effect is not in the template.
+    pub fn effect_contexts(&self, name: &str) -> Option<&[String]> {
+        self.effect_contexts.get(name).map(Vec::as_slice)
+    }
+
+    /// Whether an effect may appear more than once in a context.
+    pub fn effect_stackable(&self, name: &str) -> bool {
+        self.stackable_effects.contains(name)
+    }
+
+    /// Sorted effect names that list `context` in their `contexts`.
+    pub fn context_effects(&self, context: &str) -> &[String] {
+        self.context_effects
+            .get(context)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// Every context named by any effect, sorted.
+    pub fn effect_context_names(&self) -> impl Iterator<Item = &String> {
+        self.context_effects.keys()
+    }
+
     /// Sorted `dataName`s for a template (e.g. [`TEMPLATE_TRAITS`]).
     pub fn names(&self, template: &str) -> &[String] {
         self.names.get(template).map(Vec::as_slice).unwrap_or(&[])
@@ -368,9 +399,87 @@ impl GameData {
             collect_project_costs(&dir.join(&file), &mut project_costs);
             collect_project_costs(&dir.join("Templates").join(&file), &mut project_costs);
         }
+        let mut effect_contexts = BTreeMap::new();
+        let file = format!("{TEMPLATE_EFFECTS}.json");
+        collect_effect_contexts(&paths.templates.join(&file), &mut effect_contexts);
+        for dir in &mod_dirs {
+            collect_effect_contexts(&dir.join(&file), &mut effect_contexts);
+            collect_effect_contexts(&dir.join("Templates").join(&file), &mut effect_contexts);
+        }
+        let mut stackable_effects = BTreeSet::new();
+        collect_stackable_effects(&paths.templates.join(&file), &mut stackable_effects);
+        for dir in &mod_dirs {
+            collect_stackable_effects(&dir.join(&file), &mut stackable_effects);
+            collect_stackable_effects(&dir.join("Templates").join(&file), &mut stackable_effects);
+        }
+        let mut by_context: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        for (effect, contexts) in &effect_contexts {
+            for context in contexts {
+                by_context
+                    .entry(context.clone())
+                    .or_default()
+                    .push(effect.clone());
+            }
+        }
         GameData {
             names,
             project_costs,
+            effect_contexts,
+            context_effects: by_context,
+            stackable_effects,
+        }
+    }
+}
+
+/// Track effects with `stackable: true`; later files override earlier ones, and
+/// entries without the field are left alone.
+fn collect_stackable_effects(path: &Path, out: &mut BTreeSet<String>) {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let text = text.trim_start_matches('\u{feff}');
+    let Ok(serde_json::Value::Array(entries)) = json5::from_str::<serde_json::Value>(text) else {
+        return;
+    };
+    for entry in entries {
+        if let Some(name) = entry.get("dataName").and_then(|v| v.as_str())
+            && let Some(stackable) = entry.get("stackable").and_then(|v| v.as_bool())
+        {
+            if stackable {
+                out.insert(name.to_string());
+            } else {
+                out.remove(name);
+            }
+        }
+    }
+}
+
+/// Record each effect's `contexts`; later files override earlier ones, and
+/// entries without the field keep any earlier value (or start empty).
+fn collect_effect_contexts(path: &Path, out: &mut BTreeMap<String, Vec<String>>) {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let text = text.trim_start_matches('\u{feff}');
+    let Ok(serde_json::Value::Array(entries)) = json5::from_str::<serde_json::Value>(text) else {
+        return;
+    };
+    for entry in entries {
+        let Some(name) = entry.get("dataName").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if name.is_empty() || name == "dummy" {
+            continue;
+        }
+        let slot = out.entry(name.to_string()).or_default();
+        if let Some(list) = entry.get("contexts").and_then(|v| v.as_array()) {
+            let mut contexts: Vec<String> = list
+                .iter()
+                .filter_map(|c| c.as_str().map(str::to_string))
+                .collect();
+            contexts.sort();
+            contexts.dedup();
+            *slot = contexts;
         }
     }
 }
