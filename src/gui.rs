@@ -4628,17 +4628,34 @@ impl TiseApp {
                             };
                             let mut changed = false;
                             let mut remove: Option<usize> = None;
+                            let mut set_count: Option<(String, usize)> = None;
                             ui.horizontal_wrapped(|ui| {
                                 for (i, v) in names.iter().enumerate() {
                                     let Some(name) = v.as_str() else {
                                         continue;
                                     };
-                                    let valid_in: Option<&[String]> =
-                                        catalog.and_then(|g| g.effect_contexts(name));
-                                    let mut text = egui::RichText::new(format!("{name}  \u{2715}"));
-                                    let mut tip = None;
                                     let stackable =
                                         catalog.is_some_and(|g| g.effect_stackable(name));
+                                    // Stackable effects collapse into one chip at their first
+                                    // occurrence, with an editable occurrence count.
+                                    let mut occurrences = 1;
+                                    if stackable {
+                                        if names[..i].iter().any(|p| p.as_str() == Some(name)) {
+                                            continue;
+                                        }
+                                        occurrences = names
+                                            .iter()
+                                            .filter(|p| p.as_str() == Some(name))
+                                            .count();
+                                    }
+                                    let valid_in: Option<&[String]> =
+                                        catalog.and_then(|g| g.effect_contexts(name));
+                                    let mut text = egui::RichText::new(if stackable {
+                                        name.to_string()
+                                    } else {
+                                        format!("{name}  \u{2715}")
+                                    });
+                                    let mut tip = None;
                                     if !stackable
                                         && names[..i].iter().any(|p| p.as_str() == Some(name))
                                     {
@@ -4651,17 +4668,82 @@ impl TiseApp {
                                         text = text.color(egui::Color32::ORANGE);
                                         tip = Some(statics::EN_FACTION_EFFECTS_WRONG_CONTEXT);
                                     }
-                                    let mut resp = ui.button(text);
-                                    if let Some(tip) = tip {
-                                        resp = resp.on_hover_text(tip);
-                                    }
-                                    if resp.clicked() {
-                                        remove = Some(i);
+                                    if stackable {
+                                        // Chip with the editable count inside; the cross drops them all.
+                                        let widget = ui.visuals().widgets.inactive;
+                                        let mut count = occurrences;
+                                        let mut drop_all = false;
+                                        let chip = egui::Frame::new()
+                                            .fill(widget.weak_bg_fill)
+                                            .corner_radius(widget.corner_radius)
+                                            .inner_margin(egui::Margin::symmetric(6, 2))
+                                            .show(ui, |ui| {
+                                                ui.horizontal(|ui| {
+                                                    ui.spacing_mut().item_spacing.x = 4.0;
+                                                    // Reserve the bordered field's full height up front so
+                                                    // the items placed before it centre against it.
+                                                    let border = 4.0;
+                                                    ui.set_min_height(
+                                                        ui.spacing().interact_size.y + 2.0 * border,
+                                                    );
+                                                    let label = ui.label(text);
+                                                    egui::Frame::new()
+                                                        .stroke(egui::Stroke::new(
+                                                            border,
+                                                            ui.visuals()
+                                                                .widgets
+                                                                .noninteractive
+                                                                .bg_stroke
+                                                                .color,
+                                                        ))
+                                                        .corner_radius(widget.corner_radius)
+                                                        .show(ui, |ui| {
+                                                            ui.add(
+                                                                egui::DragValue::new(&mut count)
+                                                                    .range(0..=999),
+                                                            );
+                                                        });
+                                                    drop_all = ui
+                                                        .add(
+                                                            egui::Button::new("\u{2715}")
+                                                                .frame(false),
+                                                        )
+                                                        .clicked();
+                                                    label
+                                                })
+                                                .inner
+                                            });
+                                        if let Some(tip) = tip {
+                                            chip.inner.on_hover_text(tip);
+                                        }
+                                        if drop_all {
+                                            set_count = Some((name.to_string(), 0));
+                                        } else if count != occurrences {
+                                            set_count = Some((name.to_string(), count));
+                                        }
+                                    } else {
+                                        let mut resp = ui.button(text);
+                                        if let Some(tip) = tip {
+                                            resp = resp.on_hover_text(tip);
+                                        }
+                                        if resp.clicked() {
+                                            remove = Some(i);
+                                        }
                                     }
                                 }
                             });
                             if let Some(i) = remove {
                                 names.remove(i);
+                                changed = true;
+                            }
+                            if let Some((e, count)) = set_count {
+                                // Keep the stack at its first position.
+                                let at = names.iter().position(|p| p.as_str() == Some(&e));
+                                names.retain(|p| p.as_str() != Some(&e));
+                                let at = at.unwrap_or(names.len()).min(names.len());
+                                for _ in 0..count {
+                                    names.insert(at, TiValue::String(e.clone()));
+                                }
                                 changed = true;
                             }
 
