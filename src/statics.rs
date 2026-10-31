@@ -358,6 +358,16 @@ pub const EN_AVAILABLE_PROJECT_EDITOR: &str = "Available projects";
 pub const EN_FINISHED_PROJECT_EDITOR: &str = "Finished projects";
 /// Virtual group (not in the save): one object per faction, showing its finished projects.
 pub const GROUP_FINISHED_PROJECTS: &str = "Finished Projects";
+/// Virtual group (not in the save): regions claimed by more than one nation.
+pub const GROUP_CONTESTED_REGIONS: &str = "Contested Regions";
+pub const EN_LABEL_REGION_OWNER: &str = "Owned by:";
+pub const EN_LABEL_CONTESTING_NATIONS: &str = "Nations claiming this region";
+pub const EN_BTN_REMOVE_CLAIM: &str = "Remove claim";
+pub const EN_TAG_REGION_OWNER: &str = " (owner)";
+pub const TI_PROP_CLAIMS: &str = "claims";
+pub const TI_PROP_TEMPLATE_NAME: &str = "templateName";
+/// Template of the Alien Administration pseudo-nation, which claims nearly every region.
+pub const TI_NATION_TEMPLATE_ALIEN: &str = "ALN";
 /// Virtual group (not in the save): the `factionEffectsNames` property of TIEffectsState.
 pub const GROUP_FACTION_EFFECTS: &str = "Faction Effects";
 pub const TI_GROUP_EFFECTS_STATE: &str = "TIEffectsState";
