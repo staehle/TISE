@@ -167,6 +167,14 @@ struct TiseApp {
     // Feature: filter TIHabModuleState objects by controlling faction.
     hab_module_faction_filter: Option<i64>,
 
+    // Feature: filter TIControlPoint objects by nation.
+    control_point_nation_filter: Option<i64>,
+    control_point_nation_search: String,
+    // Feature: filter TIRegionState objects by nation.
+    region_nation_filter: Option<i64>,
+    region_nation_search: String,
+    nation_state_search: String,
+
     // Feature: filter TIOrgState objects by controlling faction.
     org_faction_filter: OrgFactionFilter,
 
@@ -2426,6 +2434,93 @@ impl TiseApp {
         self.public_opinion_remainder = Some(1.0 - sum);
     }
 
+    fn render_nation_filter_combobox(
+        ui: &mut egui::Ui,
+        nations: &[&crate::save::ObjectSummary],
+        filter: &mut Option<i64>,
+        search: &mut String,
+        id_to_display_name: &std::collections::HashMap<i64, String>,
+        id_salt: &str,
+    ) {
+        ui.horizontal(|ui| {
+            ui.label(statics::EN_LABEL_FILTER_NATION);
+            let selected_label = filter
+                .and_then(|id| id_to_display_name.get(&id))
+                .map(String::as_str)
+                .unwrap_or(statics::EN_FILTER_ALL_NATIONS);
+            egui::ComboBox::from_id_salt(id_salt)
+                .selected_text(selected_label)
+                .show_ui(ui, |ui| {
+                    let search_resp = ui.add(
+                        egui::TextEdit::singleline(search)
+                            .hint_text(statics::EN_HINT_SEARCH_NATIONS),
+                    );
+                    if !search_resp.has_focus() && search.is_empty() {
+                        search_resp.request_focus();
+                    }
+                    ui.separator();
+                    let needle = search.trim().to_lowercase();
+                    egui::ScrollArea::vertical()
+                        .max_height(300.0)
+                        .show(ui, |ui| {
+                            if needle.is_empty() {
+                                ui.selectable_value(filter, None, statics::EN_FILTER_ALL_NATIONS);
+                            }
+                            for nation in nations
+                                .iter()
+                                .filter(|n| n.display_name.to_lowercase().contains(&needle))
+                            {
+                                ui.selectable_value(filter, Some(nation.id), &nation.display_name);
+                            }
+                        });
+                });
+        });
+    }
+
+    /// Searchable nation dropdown; returns the nation clicked this frame, if any.
+    fn render_nation_picker_combobox(
+        ui: &mut egui::Ui,
+        nations: &[&crate::save::ObjectSummary],
+        current: i64,
+        search: &mut String,
+        id_to_display_name: &std::collections::HashMap<i64, String>,
+    ) -> Option<i64> {
+        let mut picked = None;
+        ui.label(statics::EN_LABEL_FILTER_NATION);
+        let selected_label = id_to_display_name
+            .get(&current)
+            .map(String::as_str)
+            .unwrap_or(statics::EN_FILTER_SELECT_NATION);
+        egui::ComboBox::from_id_salt("nation_state_picker")
+            .selected_text(selected_label)
+            .show_ui(ui, |ui| {
+                let search_resp = ui.add(
+                    egui::TextEdit::singleline(search).hint_text(statics::EN_HINT_SEARCH_NATIONS),
+                );
+                if !search_resp.has_focus() && search.is_empty() {
+                    search_resp.request_focus();
+                }
+                ui.separator();
+                let needle = search.trim().to_lowercase();
+                egui::ScrollArea::vertical()
+                    .max_height(300.0)
+                    .show(ui, |ui| {
+                        for nation in nations
+                            .iter()
+                            .filter(|n| n.display_name.to_lowercase().contains(&needle))
+                        {
+                            if ui
+                                .selectable_label(current == nation.id, &nation.display_name)
+                                .clicked()
+                            {
+                                picked = Some(nation.id);
+                            }
+                        }
+                    });
+            });
+        picked
+    }
+
     fn render_faction_filter_combobox(
         ui: &mut egui::Ui,
         factions: &[&crate::save::ObjectSummary],
@@ -3985,6 +4080,18 @@ fn hab_module_faction_id(save: &crate::LoadedSave, module_id: i64) -> Option<i64
     let sector_val = save.get_object_value(statics::TI_GROUP_SECTOR_STATE, sector_id)?;
     sector_val
         .get(statics::TI_PROP_FACTION)?
+        .is_relational_ref()
+}
+
+fn control_point_nation_id(save: &crate::LoadedSave, control_point_id: i64) -> Option<i64> {
+    save.get_object_value(statics::TI_GROUP_CONTROL_POINT, control_point_id)?
+        .get(statics::TI_PROP_NATION)?
+        .is_relational_ref()
+}
+
+fn region_nation_id(save: &crate::LoadedSave, region_id: i64) -> Option<i64> {
+    save.get_object_value(statics::TI_GROUP_REGION_STATE, region_id)?
+        .get(statics::TI_PROP_NATION)?
         .is_relational_ref()
 }
 
@@ -5898,6 +6005,11 @@ impl eframe::App for TiseApp {
                 });
             });
 
+        // Leaving TINationState resets its nation dropdown search.
+        if self.selected_group.as_deref() != Some(statics::TI_GROUP_NATION_STATE) {
+            self.nation_state_search.clear();
+        }
+
         let mut org_add_faction_request: Option<i64> = None;
 
         // Singleton groups (e.g. TIGlobalResearchState) have nothing to pick from, so
@@ -5920,7 +6032,15 @@ impl eframe::App for TiseApp {
             self.selected_group.as_deref() == Some(statics::GROUP_FACTION_EFFECTS);
 
         // Singleton selection must not hijack the virtual groups.
-        if singleton_object.is_none() && !finished_projects_selected && !faction_effects_selected {
+        // Nations pick from a dropdown in the header instead.
+        let nation_state_selected =
+            self.selected_group.as_deref() == Some(statics::TI_GROUP_NATION_STATE);
+
+        if singleton_object.is_none()
+            && !finished_projects_selected
+            && !faction_effects_selected
+            && !nation_state_selected
+        {
             egui::Panel::left("objects_panel")
                 .resizable(true)
                 .default_size(360.0)
@@ -5928,19 +6048,68 @@ impl eframe::App for TiseApp {
                     ui.heading(statics::EN_HEADING_OBJECTS);
                     ui.separator();
 
-                    ui.horizontal(|ui| {
-                        ui.label(statics::EN_LABEL_SORT);
-                        ui.selectable_value(
-                            &mut self.sort_objects_by_id,
-                            false,
-                            statics::EN_SORT_NAME,
+                    if self.selected_group.as_deref() == Some(statics::TI_GROUP_CONTROL_POINT) {
+                        // Control points replace the sort row with a nation dropdown.
+                        let mut nations: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_NATION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        nations.sort_by_key(|n: &&crate::save::ObjectSummary| {
+                            n.display_name.to_lowercase()
+                        });
+                        Self::render_nation_filter_combobox(
+                            ui,
+                            &nations,
+                            &mut self.control_point_nation_filter,
+                            &mut self.control_point_nation_search,
+                            id_to_display_name,
+                            "control_point_nation_filter",
                         );
-                        ui.selectable_value(
-                            &mut self.sort_objects_by_id,
-                            true,
-                            statics::EN_SORT_ID,
+                    } else if self.selected_group.as_deref() == Some(statics::TI_GROUP_REGION_STATE)
+                    {
+                        ui.horizontal(|ui| {
+                            ui.label(statics::EN_LABEL_SORT);
+                            ui.selectable_value(
+                                &mut self.sort_objects_by_id,
+                                false,
+                                statics::EN_SORT_NAME,
+                            );
+                            ui.selectable_value(
+                                &mut self.sort_objects_by_id,
+                                true,
+                                statics::EN_SORT_ID,
+                            );
+                        });
+                        let mut nations: Vec<_> = objects_by_group
+                            .get(statics::TI_GROUP_NATION_STATE)
+                            .map(|v| v.iter().collect())
+                            .unwrap_or_default();
+                        nations.sort_by_key(|n: &&crate::save::ObjectSummary| {
+                            n.display_name.to_lowercase()
+                        });
+                        Self::render_nation_filter_combobox(
+                            ui,
+                            &nations,
+                            &mut self.region_nation_filter,
+                            &mut self.region_nation_search,
+                            id_to_display_name,
+                            "region_nation_filter",
                         );
-                    });
+                    } else {
+                        ui.horizontal(|ui| {
+                            ui.label(statics::EN_LABEL_SORT);
+                            ui.selectable_value(
+                                &mut self.sort_objects_by_id,
+                                false,
+                                statics::EN_SORT_NAME,
+                            );
+                            ui.selectable_value(
+                                &mut self.sort_objects_by_id,
+                                true,
+                                statics::EN_SORT_ID,
+                            );
+                        });
+                    }
                     ui.separator();
 
                     let Some(group) = self.selected_group.clone() else {
@@ -6103,6 +6272,20 @@ impl eframe::App for TiseApp {
                         objects.retain(|obj| hab_faction_id(&save, obj.id) == Some(faction_id));
                     }
 
+                    if group == statics::TI_GROUP_CONTROL_POINT
+                        && let Some(nation_id) = self.control_point_nation_filter
+                    {
+                        objects.retain(|obj| {
+                            control_point_nation_id(&save, obj.id) == Some(nation_id)
+                        });
+                    }
+
+                    if group == statics::TI_GROUP_REGION_STATE
+                        && let Some(nation_id) = self.region_nation_filter
+                    {
+                        objects.retain(|obj| region_nation_id(&save, obj.id) == Some(nation_id));
+                    }
+
                     if group == statics::TI_GROUP_COUNCILOR_STATE
                         && let Some(faction_id) = self.councilor_faction_filter
                     {
@@ -6238,6 +6421,18 @@ impl eframe::App for TiseApp {
                     self.select_object_user(&group, id);
                 }
             }
+            if group == statics::TI_GROUP_NATION_STATE && self.selected_object_id.is_none() {
+                // No object list for this group: start on the first nation by name.
+                let first = save
+                    .index
+                    .objects_by_group
+                    .get(statics::TI_GROUP_NATION_STATE)
+                    .and_then(|v| v.iter().min_by_key(|o| o.display_name.to_lowercase()))
+                    .map(|o| o.id);
+                if let Some(id) = first {
+                    self.select_object_user(&group, id);
+                }
+            }
             let Some(object_id) = self.selected_object_id else {
                 ui.label(statics::EN_SELECT_OBJECT);
                 return;
@@ -6258,9 +6453,29 @@ impl eframe::App for TiseApp {
                 return;
             };
 
+            let mut nation_pick: Option<i64> = None;
             ui.horizontal(|ui| {
                 ui.heading(LoadedSave::group_display_name(&group));
                 ui.separator();
+                if group == statics::TI_GROUP_NATION_STATE {
+                    let mut nations: Vec<_> = save
+                        .index
+                        .objects_by_group
+                        .get(statics::TI_GROUP_NATION_STATE)
+                        .map(|v| v.iter().collect())
+                        .unwrap_or_default();
+                    nations.sort_by_key(|n: &&crate::save::ObjectSummary| {
+                        n.display_name.to_lowercase()
+                    });
+                    nation_pick = Self::render_nation_picker_combobox(
+                        ui,
+                        &nations,
+                        object_id,
+                        &mut self.nation_state_search,
+                        &save.index.id_to_display_name,
+                    );
+                    ui.separator();
+                }
                 ui.label(format!("ID {object_id}"));
                 if dirty {
                     ui.separator();
@@ -6268,6 +6483,10 @@ impl eframe::App for TiseApp {
                 }
             });
             ui.separator();
+            if let Some(id) = nation_pick {
+                self.select_object_user(&group, id);
+                return;
+            }
 
             // Faction finished projects are edited in the virtual Finished Projects group.
             let mut properties: Vec<_> = value_obj
