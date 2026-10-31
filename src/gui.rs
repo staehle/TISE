@@ -4,7 +4,7 @@ use crate::{GroupCategory, LoadedSave, TiValue};
 use eframe::egui;
 use egui_extras::{Column, TableBuilder};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::PathBuf,
     sync::OnceLock,
 };
@@ -173,6 +173,9 @@ struct TiseApp {
     // Feature: filter TIRegionState objects by nation.
     region_nation_filter: Option<i64>,
     region_nation_search: String,
+    // Feature: filter the virtual Contested Regions group by contesting nation.
+    contested_region_nation_filter: Option<i64>,
+    contested_region_nation_search: String,
     nation_state_search: String,
 
     // Feature: filter TIOrgState objects by controlling faction.
@@ -2169,6 +2172,64 @@ impl TiseApp {
         }
     }
 
+    /// Removes `region_id` from a nation's `claims`, recording the edit for undo.
+    fn remove_nation_claim(&mut self, save: &mut LoadedSave, nation_id: i64, region_id: i64) {
+        let group = statics::TI_GROUP_NATION_STATE;
+        let prop = statics::TI_PROP_CLAIMS;
+        let Some(before) = save
+            .get_object_value(group, nation_id)
+            .and_then(|o| o.get(prop))
+            .cloned()
+        else {
+            self.last_error = Some(statics::EN_ERR_LOCATE_SELECTED_OBJECT.to_string());
+            return;
+        };
+        let TiValue::Array(items) = &before else {
+            return;
+        };
+        let after = TiValue::Array(
+            items
+                .iter()
+                .filter(|item| item.is_relational_ref() != Some(region_id))
+                .cloned()
+                .collect(),
+        );
+        if after == before {
+            return;
+        }
+        let Some(value_obj) = save.get_object_value_mut(group, nation_id) else {
+            self.last_error = Some(statics::EN_ERR_LOCATE_SELECTED_OBJECT.to_string());
+            return;
+        };
+        value_obj.insert(prop.to_string(), after.clone());
+        save.rebuild_index();
+        save.refresh_dirty();
+
+        let name_of = |id: i64| {
+            save.index
+                .id_to_display_name
+                .get(&id)
+                .cloned()
+                .unwrap_or_default()
+        };
+        let desc = format!(
+            "{} {nation_id}: removed claim on {region_id} ({}) from {}",
+            statics::EN_SORT_ID,
+            name_of(region_id),
+            name_of(nation_id),
+        );
+        self.record_action(EditAction {
+            group: group.to_string(),
+            object_id: nation_id,
+            prop: prop.to_string(),
+            before: Some(before),
+            after: Some(after),
+            description: desc.clone(),
+        });
+        self.status = desc;
+        self.last_error = None;
+    }
+
     fn set_property_null(&mut self, save: &mut LoadedSave) {
         let Some(group) = self.selected_group.clone() else {
             return;
@@ -4089,6 +4150,100 @@ fn control_point_nation_id(save: &crate::LoadedSave, control_point_id: i64) -> O
         .is_relational_ref()
 }
 
+/// Claimed regions mapped to the nations whose `claims` include them, keeping only regions
+/// claimed by more than one nation (Alien Administration is not counted). Nation IDs are sorted ascending.
+fn contested_region_claimants(save: &crate::LoadedSave) -> HashMap<i64, BTreeSet<i64>> {
+    let mut claimants: HashMap<i64, BTreeSet<i64>> = HashMap::new();
+    let nations = save
+        .index
+        .objects_by_group
+        .get(statics::TI_GROUP_NATION_STATE)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    for nation in nations {
+        let Some(props) = save.get_object_value(statics::TI_GROUP_NATION_STATE, nation.id) else {
+            continue;
+        };
+        let is_alien = matches!(
+            props.get(statics::TI_PROP_TEMPLATE_NAME),
+            Some(TiValue::String(t)) if t == statics::TI_NATION_TEMPLATE_ALIEN
+        );
+        let Some(TiValue::Array(claims)) = props.get(statics::TI_PROP_CLAIMS) else {
+            continue;
+        };
+        if is_alien {
+            continue;
+        }
+        for region_id in claims.iter().filter_map(TiValue::is_relational_ref) {
+            claimants.entry(region_id).or_default().insert(nation.id);
+        }
+    }
+    claimants.retain(|_, nations| nations.len() > 1);
+    claimants
+}
+
+enum ContestedRegionAction {
+    GoToNation(i64),
+    RemoveClaim(i64),
+}
+
+/// Shows the nations contesting a region. Returns the action the user chose, if any.
+fn render_contested_region_view(
+    ui: &mut egui::Ui,
+    save: &LoadedSave,
+    region_id: i64,
+) -> Option<ContestedRegionAction> {
+    let name_of = |id: i64| {
+        save.index
+            .id_to_display_name
+            .get(&id)
+            .map(String::as_str)
+            .unwrap_or(statics::EN_EMPTY)
+    };
+    ui.horizontal(|ui| {
+        ui.heading(statics::GROUP_CONTESTED_REGIONS);
+        ui.separator();
+        ui.label(format!("{region_id}: {}", name_of(region_id)));
+    });
+    ui.separator();
+
+    let owner = region_nation_id(save, region_id);
+    if let Some(owner) = owner {
+        ui.label(format!(
+            "{} {owner}: {}",
+            statics::EN_LABEL_REGION_OWNER,
+            name_of(owner)
+        ));
+    }
+
+    let claimants = contested_region_claimants(save)
+        .remove(&region_id)
+        .unwrap_or_default();
+    ui.label(format!(
+        "{} ({})",
+        statics::EN_LABEL_CONTESTING_NATIONS,
+        claimants.len()
+    ));
+    let mut action = None;
+    for nation_id in claimants {
+        ui.horizontal(|ui| {
+            if ui.small_button(statics::EN_BTN_GO).clicked() {
+                action = Some(ContestedRegionAction::GoToNation(nation_id));
+            }
+            if ui.small_button(statics::EN_BTN_REMOVE_CLAIM).clicked() {
+                action = Some(ContestedRegionAction::RemoveClaim(nation_id));
+            }
+            let owner_tag = if Some(nation_id) == owner {
+                statics::EN_TAG_REGION_OWNER
+            } else {
+                ""
+            };
+            ui.label(format!("{nation_id}: {}{owner_tag}", name_of(nation_id)));
+        });
+    }
+    action
+}
+
 fn region_nation_id(save: &crate::LoadedSave, region_id: i64) -> Option<i64> {
     save.get_object_value(statics::TI_GROUP_REGION_STATE, region_id)?
         .get(statics::TI_PROP_NATION)?
@@ -5410,6 +5565,12 @@ impl eframe::App for TiseApp {
         if objects_by_group.contains_key(statics::TI_GROUP_FACTION_STATE) {
             groups.push(statics::GROUP_FINISHED_PROJECTS.to_string());
         }
+        // Virtual group: regions claimed by more than one nation.
+        if objects_by_group.contains_key(statics::TI_GROUP_REGION_STATE)
+            && objects_by_group.contains_key(statics::TI_GROUP_NATION_STATE)
+        {
+            groups.push(statics::GROUP_CONTESTED_REGIONS.to_string());
+        }
         // Virtual group: factionEffectsNames, split out of TIEffectsState.
         let effects_group = Self::effects_state_group(&save);
         if effects_group.is_some() {
@@ -6066,34 +6227,62 @@ impl eframe::App for TiseApp {
                             "control_point_nation_filter",
                         );
                     } else if self.selected_group.as_deref() == Some(statics::TI_GROUP_REGION_STATE)
+                        || self.selected_group.as_deref() == Some(statics::GROUP_CONTESTED_REGIONS)
                     {
-                        ui.horizontal(|ui| {
-                            ui.label(statics::EN_LABEL_SORT);
-                            ui.selectable_value(
-                                &mut self.sort_objects_by_id,
-                                false,
-                                statics::EN_SORT_NAME,
-                            );
-                            ui.selectable_value(
-                                &mut self.sort_objects_by_id,
-                                true,
-                                statics::EN_SORT_ID,
-                            );
-                        });
+                        let contested_selected = self.selected_group.as_deref()
+                            == Some(statics::GROUP_CONTESTED_REGIONS);
+                        if !contested_selected {
+                            ui.horizontal(|ui| {
+                                ui.label(statics::EN_LABEL_SORT);
+                                ui.selectable_value(
+                                    &mut self.sort_objects_by_id,
+                                    false,
+                                    statics::EN_SORT_NAME,
+                                );
+                                ui.selectable_value(
+                                    &mut self.sort_objects_by_id,
+                                    true,
+                                    statics::EN_SORT_ID,
+                                );
+                            });
+                        }
                         let mut nations: Vec<_> = objects_by_group
                             .get(statics::TI_GROUP_NATION_STATE)
                             .map(|v| v.iter().collect())
                             .unwrap_or_default();
+                        if contested_selected {
+                            // Only offer nations that actually contest a region.
+                            let contesting: BTreeSet<i64> = contested_region_claimants(&save)
+                                .into_values()
+                                .flatten()
+                                .collect();
+                            nations.retain(|n: &&crate::save::ObjectSummary| {
+                                contesting.contains(&n.id)
+                            });
+                        }
                         nations.sort_by_key(|n: &&crate::save::ObjectSummary| {
                             n.display_name.to_lowercase()
                         });
+                        let (filter, search, salt) = if contested_selected {
+                            (
+                                &mut self.contested_region_nation_filter,
+                                &mut self.contested_region_nation_search,
+                                "contested_region_nation_filter",
+                            )
+                        } else {
+                            (
+                                &mut self.region_nation_filter,
+                                &mut self.region_nation_search,
+                                "region_nation_filter",
+                            )
+                        };
                         Self::render_nation_filter_combobox(
                             ui,
                             &nations,
-                            &mut self.region_nation_filter,
-                            &mut self.region_nation_search,
+                            filter,
+                            search,
                             id_to_display_name,
-                            "region_nation_filter",
+                            salt,
                         );
                     } else {
                         ui.horizontal(|ui| {
@@ -6256,11 +6445,25 @@ impl eframe::App for TiseApp {
                     }
 
                     let mut objects: Vec<_> = objects_by_group
-                        .get(group.as_str())
+                        .get(if group == statics::GROUP_CONTESTED_REGIONS {
+                            statics::TI_GROUP_REGION_STATE
+                        } else {
+                            group.as_str()
+                        })
                         .map(|v| v.iter().collect())
                         .unwrap_or_default();
 
-                    if self.sort_objects_by_id {
+                    if group == statics::GROUP_CONTESTED_REGIONS {
+                        let contested = contested_region_claimants(&save);
+                        objects.retain(|obj| {
+                            contested.get(&obj.id).is_some_and(|nations| {
+                                self.contested_region_nation_filter
+                                    .is_none_or(|id| nations.contains(&id))
+                            })
+                        });
+                    }
+
+                    if self.sort_objects_by_id && group != statics::GROUP_CONTESTED_REGIONS {
                         objects.sort_by_key(|o| o.id);
                     } else {
                         objects.sort_by_key(|o| o.display_name.to_lowercase());
@@ -6447,6 +6650,23 @@ impl eframe::App for TiseApp {
                 return;
             }
 
+            if group == statics::GROUP_CONTESTED_REGIONS {
+                match render_contested_region_view(ui, &save, object_id) {
+                    Some(ContestedRegionAction::GoToNation(nation_id)) => {
+                        self.select_object_programmatic(
+                            statics::TI_GROUP_NATION_STATE,
+                            nation_id,
+                            true,
+                            true,
+                        );
+                    }
+                    Some(ContestedRegionAction::RemoveClaim(nation_id)) => {
+                        self.remove_nation_claim(&mut save, nation_id, object_id);
+                    }
+                    None => {}
+                }
+                return;
+            }
             let value_obj = save.get_object_value(&group, object_id).cloned();
             let Some(value_obj) = value_obj else {
                 ui.colored_label(egui::Color32::RED, statics::EN_ERR_OBJECT_VALUE_MISSING);
@@ -6596,6 +6816,35 @@ mod tests {
             TiValue::Object(gamestates),
         );
         LoadedSave::from_root_for_test(TiValue::Object(root))
+    }
+
+    #[test]
+    fn contested_regions_need_claims_from_two_nations() {
+        let claims = |ids: &[i64]| {
+            let mut props = IndexMap::new();
+            props.insert(
+                statics::TI_PROP_CLAIMS.to_string(),
+                TiValue::Array(ids.iter().map(|&i| make_ref(i)).collect()),
+            );
+            props
+        };
+        let mut gamestates = IndexMap::new();
+        gamestates.insert(
+            statics::TI_GROUP_NATION_STATE.to_string(),
+            TiValue::Array(vec![
+                make_ti_entry(10, claims(&[1, 2])),
+                make_ti_entry(11, claims(&[1, 3, 3])),
+            ]),
+        );
+        let mut root = IndexMap::new();
+        root.insert(
+            statics::TI_GAMESTATES.to_string(),
+            TiValue::Object(gamestates),
+        );
+        let save = LoadedSave::from_root_for_test(TiValue::Object(root));
+        let contested = super::contested_region_claimants(&save);
+        assert_eq!(contested.len(), 1);
+        assert_eq!(contested[&1], std::collections::BTreeSet::from([10, 11]));
     }
 
     fn summary(id: i64) -> ObjectSummary {
