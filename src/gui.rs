@@ -4700,7 +4700,7 @@ impl TiseApp {
                                                         .show(ui, |ui| {
                                                             ui.add(
                                                                 egui::DragValue::new(&mut count)
-                                                                    .range(0..=999),
+                                                                    .range(0..=9999),
                                                             );
                                                         });
                                                     drop_all = ui
