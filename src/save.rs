@@ -202,8 +202,12 @@ impl LoadedSave {
             return GroupCategory::Facilities;
         }
         match name {
-            "TIFactionState" | "TIPlayerState" | "TICouncilorState" | "TIOrgState"
-            | "TIOfficerState" => GroupCategory::FactionsAndPeople,
+            "TIFactionState"
+            | "TIPlayerState"
+            | "TICouncilorState"
+            | "TIOrgState"
+            | "TIOfficerState"
+            | statics::GROUP_FINISHED_PROJECTS => GroupCategory::FactionsAndPeople,
             "TINationState"
             | "TIControlPoint"
             | "TIArmyState"
@@ -223,6 +227,7 @@ impl LoadedSave {
             | "TITimeState"
             | "TINotificationQueueState"
             | "TIEffectsState"
+            | statics::GROUP_FACTION_EFFECTS
             | "TIGlobalResearchState"
             | "TIGlobalValuesState"
             | "TIPromptQueueState"
@@ -431,6 +436,19 @@ mod tests {
     use crate::{TiValue, statics};
     use indexmap::IndexMap;
     use std::path::Path;
+
+    #[test]
+    fn virtual_groups_are_categorised() {
+        use super::{GroupCategory, LoadedSave};
+        assert_eq!(
+            LoadedSave::group_category(statics::GROUP_FINISHED_PROJECTS),
+            GroupCategory::FactionsAndPeople
+        );
+        assert_eq!(
+            LoadedSave::group_category(statics::GROUP_FACTION_EFFECTS),
+            LoadedSave::group_category("TIEffectsState")
+        );
+    }
 
     #[test]
     fn detect_format_uses_extension_and_magic() {
