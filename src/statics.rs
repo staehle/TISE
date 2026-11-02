@@ -244,6 +244,14 @@ pub const TI_GROUP_HAB_MODULE_STATE: &str = "PavonisInteractive.TerraInvicta.TIH
 pub const TI_GROUP_ORG_STATE: &str = "PavonisInteractive.TerraInvicta.TIOrgState";
 pub const TI_GROUP_SECTOR_STATE: &str = "PavonisInteractive.TerraInvicta.TISectorState";
 pub const TI_GROUP_FACTION_STATE: &str = "PavonisInteractive.TerraInvicta.TIFactionState";
+pub const TI_GROUP_CONTROL_POINT: &str = "PavonisInteractive.TerraInvicta.TIControlPoint";
+pub const TI_GROUP_NATION_STATE: &str = "PavonisInteractive.TerraInvicta.TINationState";
+pub const TI_GROUP_REGION_STATE: &str = "PavonisInteractive.TerraInvicta.TIRegionState";
+pub const TI_PROP_NATION: &str = "nation";
+pub const EN_LABEL_FILTER_NATION: &str = "Nation:";
+pub const EN_FILTER_ALL_NATIONS: &str = "All Nations";
+pub const EN_FILTER_SELECT_NATION: &str = "Select nation";
+pub const EN_HINT_SEARCH_NATIONS: &str = "Search nations...";
 
 // Hab module / sector properties used for faction filtering.
 pub const TI_PROP_SECTOR: &str = "sector";
