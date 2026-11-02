@@ -6409,6 +6409,29 @@ mod tests {
     }
 
     #[test]
+    fn effects_state_group_finds_real_group_by_display_name() {
+        let mut gamestates = IndexMap::new();
+        gamestates.insert(
+            "PavonisInteractive.TerraInvicta.TIEffectsState".to_string(),
+            TiValue::Array(vec![make_ti_entry(1, IndexMap::new())]),
+        );
+        gamestates.insert("TIWarState".to_string(), TiValue::Array(vec![]));
+        let mut root = IndexMap::new();
+        root.insert(
+            statics::TI_GAMESTATES.to_string(),
+            TiValue::Object(gamestates),
+        );
+        let save = LoadedSave::from_root_for_test(TiValue::Object(root));
+        assert_eq!(
+            TiseApp::effects_state_group(&save).as_deref(),
+            Some("PavonisInteractive.TerraInvicta.TIEffectsState")
+        );
+
+        let empty = make_hab_save(1, IndexMap::new(), 2, IndexMap::new());
+        assert_eq!(TiseApp::effects_state_group(&empty), None);
+    }
+
+    #[test]
     fn singleton_object_id_hides_panel_only_for_known_singletons() {
         assert_eq!(
             singleton_object_id("PavonisInteractive.TerraInvicta.TITimeState", &[summary(7)]),

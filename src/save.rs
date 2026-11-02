@@ -438,6 +438,19 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    fn virtual_groups_are_categorised() {
+        use super::{GroupCategory, LoadedSave};
+        assert_eq!(
+            LoadedSave::group_category(statics::GROUP_FINISHED_PROJECTS),
+            GroupCategory::FactionsAndPeople
+        );
+        assert_eq!(
+            LoadedSave::group_category(statics::GROUP_FACTION_EFFECTS),
+            LoadedSave::group_category("TIEffectsState")
+        );
+    }
+
+    #[test]
     fn detect_format_uses_extension_and_magic() {
         let gz_magic = [0x1F_u8, 0x8B_u8, 0x08_u8, 0x00_u8];
         let plain = b"{ a: 1 }\n";

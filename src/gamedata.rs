@@ -662,6 +662,66 @@ mod tests {
     }
 
     #[test]
+    fn loads_effect_contexts_and_stackable_with_mod_overrides() {
+        let dir = tempfile::tempdir().unwrap();
+        let templates = fake_game(dir.path());
+        std::fs::write(
+            templates.join("TIEffectTemplate.json"),
+            r#"[{"dataName":"dummy","contexts":["X"]},
+                {"dataName":"A","contexts":["Faction","Council","Faction"],"stackable":true},
+                {"dataName":"B","contexts":["Council"]},
+                {"dataName":"C","contexts":["Faction"],"stackable":true},
+                {"dataName":""}]"#,
+        )
+        .unwrap();
+        let mod_dir = dir.path().join("Mods/Enabled/M");
+        std::fs::create_dir_all(&mod_dir).unwrap();
+        std::fs::write(
+            mod_dir.join("TIEffectTemplate.json"),
+            r#"[{"dataName":"B","contexts":["Faction"]},
+                {"dataName":"C","stackable":false},
+                {"dataName":"A"}]"#,
+        )
+        .unwrap();
+
+        let data = GameData::load(&resolve_game_paths(dir.path()).unwrap());
+        assert_eq!(data.names(TEMPLATE_EFFECTS), ["A", "B", "C"]);
+        // Duplicates are collapsed and sorted; absent field keeps the earlier value.
+        assert_eq!(data.effect_contexts("A").unwrap(), ["Council", "Faction"]);
+        // Mod overrides contexts.
+        assert_eq!(data.effect_contexts("B").unwrap(), ["Faction"]);
+        assert!(data.effect_contexts("dummy").is_none());
+        assert!(data.effect_contexts("Missing").is_none());
+
+        assert!(data.effect_stackable("A"));
+        assert!(!data.effect_stackable("C"));
+        assert!(!data.effect_stackable("B"));
+
+        assert_eq!(data.context_effects("Faction"), ["A", "B", "C"]);
+        assert_eq!(data.context_effects("Council"), ["A"]);
+        assert!(data.context_effects("Nope").is_empty());
+        assert_eq!(
+            data.effect_context_names().collect::<Vec<_>>(),
+            ["Council", "Faction"]
+        );
+    }
+
+    #[test]
+    fn effect_collectors_ignore_missing_or_invalid_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut contexts = BTreeMap::new();
+        let mut stackable = BTreeSet::new();
+        collect_effect_contexts(&dir.path().join("missing.json"), &mut contexts);
+        collect_stackable_effects(&dir.path().join("missing.json"), &mut stackable);
+        let bad = dir.path().join("bad.json");
+        std::fs::write(&bad, "not json").unwrap();
+        collect_effect_contexts(&bad, &mut contexts);
+        collect_stackable_effects(&bad, &mut stackable);
+        assert!(contexts.is_empty());
+        assert!(stackable.is_empty());
+    }
+
+    #[test]
     fn parses_steam_library_paths() {
         let vdf = "\"libraryfolders\"\n{\n\t\"0\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"\n\t\t\"label\"\t\t\"\"\n\t}\n}";
         assert_eq!(
