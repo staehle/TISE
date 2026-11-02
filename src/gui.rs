@@ -222,6 +222,9 @@ struct TiseApp {
     finished_projects_draft: Option<(i64, Vec<TiValue>)>,
     /// Unapplied edits to one faction's effects (faction id, staged context map).
     faction_effects_draft: Option<(i64, indexmap::IndexMap<String, TiValue>)>,
+    /// Each faction's effects as loaded, captured on its first Apply, so Revert
+    /// can still undo applied changes after switching factions.
+    faction_effects_baseline: std::collections::HashMap<i64, indexmap::IndexMap<String, TiValue>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -1648,6 +1651,8 @@ impl TiseApp {
 
                 self.undo_stack.clear();
                 self.redo_stack.clear();
+                self.faction_effects_baseline.clear();
+                self.faction_effects_draft = None;
                 self.changes_open = false;
             }
             Err(e) => {
@@ -4578,16 +4583,29 @@ impl TiseApp {
             .filter(|g| !g.names(crate::gamedata::TEMPLATE_EFFECTS).is_empty());
 
         let dirty = staged != *current;
+        // Applied changes that differ from the loaded state can be reverted too.
+        let baseline = self
+            .faction_effects_baseline
+            .get(&faction_id)
+            .filter(|b| *b != current)
+            .cloned();
         let mut apply = false;
         ui.horizontal(|ui| {
             apply = ui
                 .add_enabled(dirty, egui::Button::new(statics::EN_BTN_APPLY))
                 .clicked();
             if ui
-                .add_enabled(dirty, egui::Button::new(statics::EN_BTN_REVERT))
+                .add_enabled(
+                    dirty || baseline.is_some(),
+                    egui::Button::new(statics::EN_BTN_REVERT),
+                )
                 .clicked()
             {
-                staged = current.clone();
+                // First undo unapplied edits, then stage the loaded state.
+                staged = match (dirty, baseline) {
+                    (false, Some(b)) => b,
+                    _ => current.clone(),
+                };
             }
             if dirty {
                 ui.weak(statics::EN_PROJECT_UNAPPLIED);
@@ -4843,6 +4861,9 @@ impl TiseApp {
             self.faction_effects_draft = (staged != *current).then_some((faction_id, staged));
             return;
         }
+        self.faction_effects_baseline
+            .entry(faction_id)
+            .or_insert_with(|| current.clone());
         let parsed = TiValue::Object(staged);
         self.faction_effects_draft = None;
 
