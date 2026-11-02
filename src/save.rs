@@ -213,7 +213,8 @@ impl LoadedSave {
             | "TIArmyState"
             | "TIWarState"
             | "TIFederationState"
-            | "TIMegafaunaArmyState" => GroupCategory::Earth,
+            | "TIMegafaunaArmyState"
+            | statics::GROUP_CONTESTED_REGIONS => GroupCategory::Earth,
             "TISpaceBodyState"
             | "TILagrangePointState"
             | "TIOrbitState"
