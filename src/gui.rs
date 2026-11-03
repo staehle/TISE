@@ -2235,6 +2235,51 @@ impl TiseApp {
         self.last_error = None;
     }
 
+    /// "Complete tomorrow" cheat: sets a hab module's `completionDate` to one day after the
+    /// in-game time, recording the edit for undo.
+    fn complete_hab_module_tomorrow(&mut self, save: &mut LoadedSave, object_id: i64) {
+        let group = statics::TI_GROUP_HAB_MODULE_STATE;
+        let prop = statics::TI_PROP_COMPLETION_DATE;
+        let Some(tomorrow) = in_game_tomorrow(save) else {
+            self.last_error = Some(statics::EN_ERR_READ_GAME_TIME.to_string());
+            return;
+        };
+        let after = TiValue::String(tomorrow);
+        let before = save
+            .get_object_value(group, object_id)
+            .and_then(|o| o.get(prop))
+            .cloned();
+        {
+            let Some(value_obj) = save.get_object_value_mut(group, object_id) else {
+                self.last_error = Some(statics::EN_ERR_LOCATE_SELECTED_OBJECT.to_string());
+                return;
+            };
+            value_obj.insert(prop.to_string(), after.clone());
+        }
+        save.rebuild_index();
+        save.refresh_dirty();
+
+        let desc = format!(
+            "{} {}: {}",
+            statics::EN_SORT_ID,
+            object_id,
+            Self::describe_change(prop, before.as_ref(), Some(&after))
+        );
+        if self.selected_property.as_deref() == Some(prop) {
+            self.edit_buffer = after.to_json5_compact();
+        }
+        self.record_action(EditAction {
+            group: group.to_string(),
+            object_id,
+            prop: prop.to_string(),
+            before,
+            after: Some(after),
+            description: desc.clone(),
+        });
+        self.status = desc;
+        self.last_error = None;
+    }
+
     fn set_property_null(&mut self, save: &mut LoadedSave) {
         let Some(group) = self.selected_group.clone() else {
             return;
@@ -2803,6 +2848,15 @@ impl TiseApp {
         save: &mut LoadedSave,
     ) {
         ui.heading(statics::EN_HEADING_EDIT);
+        if self.selected_group.as_deref() == Some(statics::TI_GROUP_HAB_MODULE_STATE)
+            && let Some(object_id) = self.selected_object_id
+            && ui
+                .button(statics::EN_BUTTON_COMPLETE_TOMORROW)
+                .on_hover_text(statics::EN_HOVER_COMPLETE_TOMORROW)
+                .clicked()
+        {
+            self.complete_hab_module_tomorrow(save, object_id);
+        }
         ui.separator();
 
         let scroll_h = ui.available_height();
@@ -4261,6 +4315,62 @@ fn hab_module_construction_completed(save: &crate::LoadedSave, module_id: i64) -
         crate::TiValue::Bool(b) => Some(*b),
         _ => None,
     }
+}
+
+/// Number of days in `month` (1-12) of `year`, Gregorian.
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        2 if (year % 4 == 0 && year % 100 != 0) || year % 400 == 0 => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+/// Formats the in-game date plus one day as a `completionDate` string, keeping the
+/// time of day. Returns `None` for out-of-range fields.
+fn next_day_date_string(
+    (year, month, day): (i64, i64, i64),
+    (hour, minute, second): (i64, i64, i64),
+) -> Option<String> {
+    if !(1..=12).contains(&month) || day < 1 || day > days_in_month(year, month) {
+        return None;
+    }
+    let (mut y, mut m, mut d) = (year, month, day + 1);
+    if d > days_in_month(y, m) {
+        d = 1;
+        m += 1;
+        if m > 12 {
+            m = 1;
+            y += 1;
+        }
+    }
+    Some(format!(
+        "{y:04}-{m:02}-{d:02}T{hour:02}:{minute:02}:{second:02}.0000000"
+    ))
+}
+
+/// Reads `TITimeState.currentDateTime` and returns that moment plus one day, in the
+/// format used by `TIHabModuleState.completionDate`.
+fn in_game_tomorrow(save: &crate::LoadedSave) -> Option<String> {
+    let group = save
+        .index
+        .objects_by_group
+        .keys()
+        .find(|g| LoadedSave::group_display_name(g) == statics::TI_GROUP_TIME_STATE)?;
+    let id = save.index.objects_by_group.get(group)?.first()?.id;
+    let now = save
+        .get_object_value(group, id)?
+        .get(statics::TI_PROP_CURRENT_DATE_TIME)?
+        .as_object()?;
+    let field = |name: &str| match now.get(name)? {
+        TiValue::Number(n) => n.as_i64(),
+        _ => None,
+    };
+    next_day_date_string(
+        (field("year")?, field("month")?, field("day")?),
+        (field("hour")?, field("minute")?, field("second")?),
+    )
 }
 
 fn array_of_relational_refs(val: &TiValue) -> Option<Vec<i64>> {
@@ -6926,6 +7036,33 @@ mod tests {
             singleton_object_id("TITimeState", &[summary(1), summary(2)]),
             None
         );
+    }
+
+    #[test]
+    fn next_day_date_string_rolls_over_month_and_year() {
+        use super::next_day_date_string as f;
+        assert_eq!(
+            f((2026, 11, 3), (0, 20, 15)).as_deref(),
+            Some("2026-11-04T00:20:15.0000000")
+        );
+        assert_eq!(
+            f((2026, 11, 30), (0, 0, 0)).as_deref(),
+            Some("2026-12-01T00:00:00.0000000")
+        );
+        assert_eq!(
+            f((2026, 12, 31), (0, 0, 0)).as_deref(),
+            Some("2027-01-01T00:00:00.0000000")
+        );
+        assert_eq!(
+            f((2028, 2, 28), (0, 0, 0)).as_deref(),
+            Some("2028-02-29T00:00:00.0000000")
+        );
+        assert_eq!(
+            f((2027, 2, 28), (0, 0, 0)).as_deref(),
+            Some("2027-03-01T00:00:00.0000000")
+        );
+        assert_eq!(f((2027, 2, 29), (0, 0, 0)), None);
+        assert_eq!(f((2027, 13, 1), (0, 0, 0)), None);
     }
 
     #[test]

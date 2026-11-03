@@ -266,6 +266,17 @@ pub const TI_PROP_AVAILABLE_ORGS: &str = "availableOrgs";
 
 // Hab module property for construction state.
 pub const TI_PROP_CONSTRUCTION_COMPLETED: &str = "constructionCompleted";
+pub const TI_PROP_COMPLETION_DATE: &str = "completionDate";
+
+// In-game clock (TITimeState singleton).
+pub const TI_GROUP_TIME_STATE: &str = "TITimeState";
+pub const TI_PROP_CURRENT_DATE_TIME: &str = "currentDateTime";
+
+// "Complete tomorrow" hab module cheat button.
+pub const EN_BUTTON_COMPLETE_TOMORROW: &str = "Complete tomorrow";
+pub const EN_HOVER_COMPLETE_TOMORROW: &str =
+    "Set completionDate to one day after the current in-game time.";
+pub const EN_ERR_READ_GAME_TIME: &str = "Could not read the in-game time from TITimeState.";
 
 // Tech progress entries (TIGlobalResearchState.techProgress).
 pub const TI_FIELD_TECH_TEMPLATE_NAME: &str = "techTemplateName";
