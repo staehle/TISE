@@ -2850,6 +2850,7 @@ impl TiseApp {
         ui.heading(statics::EN_HEADING_EDIT);
         if self.selected_group.as_deref() == Some(statics::TI_GROUP_HAB_MODULE_STATE)
             && let Some(object_id) = self.selected_object_id
+            && hab_module_construction_completed(save, object_id) != Some(true)
             && ui
                 .button(statics::EN_BUTTON_COMPLETE_TOMORROW)
                 .on_hover_text(statics::EN_HOVER_COMPLETE_TOMORROW)
