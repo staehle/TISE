@@ -86,6 +86,10 @@ pub const EN_SELECT_GROUP_LEFT: &str = "Select a group from the left.";
 pub const EN_SELECT_OBJECT: &str = "Select an object.";
 pub const EN_SELECT_PROPERTY: &str = "Select a property to edit.";
 
+/// Placeholders: `{sort_id}`, `{nation_id}`, `{region_id}`, `{region_name}`, `{nation_name}`.
+pub const EN_ACTION_REMOVED_CLAIM: &str =
+    "{sort_id} {nation_id}: removed claim on {region_id} ({region_name}) from {nation_name}";
+
 pub const EN_BTN_GO: &str = "Go";
 pub const EN_BTN_CANCEL: &str = "Cancel";
 

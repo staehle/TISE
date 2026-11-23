@@ -2217,12 +2217,12 @@ impl TiseApp {
                 .cloned()
                 .unwrap_or_default()
         };
-        let desc = format!(
-            "{} {nation_id}: removed claim on {region_id} ({}) from {}",
-            statics::EN_SORT_ID,
-            name_of(region_id),
-            name_of(nation_id),
-        );
+        let desc = statics::EN_ACTION_REMOVED_CLAIM
+            .replace("{sort_id}", statics::EN_SORT_ID)
+            .replace("{nation_id}", &nation_id.to_string())
+            .replace("{region_id}", &region_id.to_string())
+            .replace("{region_name}", &name_of(region_id))
+            .replace("{nation_name}", &name_of(nation_id));
         self.record_action(EditAction {
             group: group.to_string(),
             object_id: nation_id,
