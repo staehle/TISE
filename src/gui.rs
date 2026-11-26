@@ -4235,10 +4235,18 @@ fn render_contested_region_view(
             if ui.small_button(statics::EN_BTN_GO).clicked() {
                 action = Some(ContestedRegionAction::GoToNation(nation_id));
             }
-            if ui.small_button(statics::EN_BTN_REMOVE_CLAIM).clicked() {
+            let is_owner = Some(nation_id) == owner;
+            if ui
+                .add_enabled(
+                    !is_owner,
+                    egui::Button::new(statics::EN_BTN_REMOVE_CLAIM).small(),
+                )
+                .on_disabled_hover_text(statics::EN_HINT_OWNER_CLAIM_LOCKED)
+                .clicked()
+            {
                 action = Some(ContestedRegionAction::RemoveClaim(nation_id));
             }
-            let owner_tag = if Some(nation_id) == owner {
+            let owner_tag = if is_owner {
                 statics::EN_TAG_REGION_OWNER
             } else {
                 ""

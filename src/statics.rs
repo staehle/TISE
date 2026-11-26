@@ -368,6 +368,7 @@ pub const EN_LABEL_REGION_OWNER: &str = "Owned by:";
 pub const EN_LABEL_CONTESTING_NATIONS: &str = "Nations claiming this region";
 pub const EN_BTN_REMOVE_CLAIM: &str = "Remove claim";
 pub const EN_TAG_REGION_OWNER: &str = " (owner)";
+pub const EN_HINT_OWNER_CLAIM_LOCKED: &str = "The owning nation's claim can't be removed here";
 pub const TI_PROP_CLAIMS: &str = "claims";
 pub const TI_PROP_TEMPLATE_NAME: &str = "templateName";
 /// Template of the Alien Administration pseudo-nation, which claims nearly every region.
