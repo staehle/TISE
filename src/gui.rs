@@ -6882,7 +6882,10 @@ mod tests {
         let contested = super::contested_region_claimants(&save);
         assert_eq!(contested.len(), 1);
         assert_eq!(contested[&1], std::collections::BTreeSet::from([10, 11]));
-        assert!(!contested.contains_key(&2), "alien claims must not contest a region");
+        assert!(
+            !contested.contains_key(&2),
+            "alien claims must not contest a region"
+        );
     }
 
     fn summary(id: i64) -> ObjectSummary {
