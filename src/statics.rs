@@ -86,6 +86,10 @@ pub const EN_SELECT_GROUP_LEFT: &str = "Select a group from the left.";
 pub const EN_SELECT_OBJECT: &str = "Select an object.";
 pub const EN_SELECT_PROPERTY: &str = "Select a property to edit.";
 
+/// Placeholders: `{sort_id}`, `{nation_id}`, `{region_id}`, `{region_name}`, `{nation_name}`.
+pub const EN_ACTION_REMOVED_CLAIM: &str =
+    "{sort_id} {nation_id}: removed claim on {region_id} ({region_name}) from {nation_name}";
+
 pub const EN_BTN_GO: &str = "Go";
 pub const EN_BTN_CANCEL: &str = "Cancel";
 
@@ -358,6 +362,17 @@ pub const EN_AVAILABLE_PROJECT_EDITOR: &str = "Available projects";
 pub const EN_FINISHED_PROJECT_EDITOR: &str = "Finished projects";
 /// Virtual group (not in the save): one object per faction, showing its finished projects.
 pub const GROUP_FINISHED_PROJECTS: &str = "Finished Projects";
+/// Virtual group (not in the save): regions claimed by more than one nation.
+pub const GROUP_CONTESTED_REGIONS: &str = "Contested Regions";
+pub const EN_LABEL_REGION_OWNER: &str = "Owned by:";
+pub const EN_LABEL_CONTESTING_NATIONS: &str = "Nations claiming this region";
+pub const EN_BTN_REMOVE_CLAIM: &str = "Remove claim";
+pub const EN_TAG_REGION_OWNER: &str = " (owner)";
+pub const EN_HINT_OWNER_CLAIM_LOCKED: &str = "The owning nation's claim can't be removed here";
+pub const TI_PROP_CLAIMS: &str = "claims";
+pub const TI_PROP_TEMPLATE_NAME: &str = "templateName";
+/// Template of the Alien Administration pseudo-nation, which claims nearly every region.
+pub const TI_NATION_TEMPLATE_ALIEN: &str = "ALN";
 /// Virtual group (not in the save): the `factionEffectsNames` property of TIEffectsState.
 pub const GROUP_FACTION_EFFECTS: &str = "Faction Effects";
 pub const TI_GROUP_EFFECTS_STATE: &str = "TIEffectsState";
